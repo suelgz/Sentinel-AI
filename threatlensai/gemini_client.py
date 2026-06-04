@@ -11,6 +11,11 @@ from threat_knowledge import enrich_finding
 
 MODEL_NAME = "gemini-2.0-flash"
 
+LANGUAGE_NAMES = {
+    "en": "English",
+    "tr": "Turkish",
+}
+
 
 class GeminiAPIError(RuntimeError):
     """Raised when Gemini enrichment fails before producing findings."""
@@ -51,6 +56,7 @@ PRE-DETECTION LABELS (from rule-based filter):
 {pre_labels}
 
 Perform deep analysis and return a structured JSON array. Each element is one threat finding.
+Write all human-readable fields in {output_language}.
 
 RULES:
 - Respond ONLY with a valid JSON array. No markdown, no extra text.
@@ -86,6 +92,7 @@ Return exactly this structure:
 CODE_ANALYSIS_PROMPT = """You are ThreatLens AI, a senior application security engineer specializing in OWASP vulnerabilities.
 
 Analyze the following code snippet for security vulnerabilities.
+Write all human-readable fields in {output_language}.
 
 LANGUAGE: {language}
 
@@ -135,6 +142,7 @@ OVERALL RISK SCORE: {risk_score}/100
 SEVERITY LABEL: {severity_label}
 
 Write a clear executive summary that a CEO or business manager can act on.
+Write all human-readable fields in {output_language}.
 
 RULES:
 - Respond ONLY with a valid JSON object. No markdown, no text outside JSON.
@@ -175,6 +183,8 @@ Bu yapiyi dondur:
 
 
 def _call_gemini(api_key: str, prompt: str) -> str:
+    if not api_key:
+        raise GeminiAPIError("Gemini API key is missing.")
     client = _get_client(api_key)
     response = client.models.generate_content(
         model=MODEL_NAME,
@@ -184,13 +194,14 @@ def _call_gemini(api_key: str, prompt: str) -> str:
             max_output_tokens=4096,
         ),
     )
-    return response.text
+    return response.text or ""
 
 
-def analyze_logs(log_content: str, pre_labels: str, api_key: str) -> list:
+def analyze_logs(log_content: str, pre_labels: str, api_key: str, language: str = "en") -> list:
     prompt = LOG_ANALYSIS_PROMPT.format(
         log_content=log_content[:5000],
         pre_labels=pre_labels,
+        output_language=LANGUAGE_NAMES.get(language, "English"),
     )
     try:
         text = _call_gemini(api_key, prompt)
@@ -200,11 +211,18 @@ def analyze_logs(log_content: str, pre_labels: str, api_key: str) -> list:
         raise GeminiAPIError(str(exc)) from exc
 
 
-def analyze_code(code_snippet: str, language: str, pre_labels: str, api_key: str) -> list:
+def analyze_code(
+    code_snippet: str,
+    code_language: str,
+    pre_labels: str,
+    api_key: str,
+    language: str = "en",
+) -> list:
     prompt = CODE_ANALYSIS_PROMPT.format(
-        language=language,
+        language=code_language,
         code_snippet=code_snippet[:5000],
         pre_labels=pre_labels,
+        output_language=LANGUAGE_NAMES.get(language, "English"),
     )
     try:
         text = _call_gemini(api_key, prompt)
@@ -214,11 +232,18 @@ def analyze_code(code_snippet: str, language: str, pre_labels: str, api_key: str
         raise GeminiAPIError(str(exc)) from exc
 
 
-def generate_executive_summary(findings: list, risk_score: int, severity_label: str, api_key: str) -> dict:
+def generate_executive_summary(
+    findings: list,
+    risk_score: int,
+    severity_label: str,
+    api_key: str,
+    language: str = "en",
+) -> dict:
     prompt = EXECUTIVE_SUMMARY_PROMPT.format(
         findings_json=json.dumps(findings, indent=2)[:3500],
         risk_score=risk_score,
         severity_label=severity_label,
+        output_language=LANGUAGE_NAMES.get(language, "English"),
     )
     try:
         text = _call_gemini(api_key, prompt)

@@ -9,14 +9,23 @@ from typing import Any
 
 
 APP_DIR = Path(__file__).parent
-LEGACY_DB_PATH = APP_DIR / "sentinelai.db"
+PROJECT_DB_PATH = APP_DIR.parent / "threatlensai.db"
 DEFAULT_STATE_DIR = Path(
     os.environ.get(
-        "SENTINELAI_STATE_DIR",
-        Path(os.environ.get("LOCALAPPDATA", APP_DIR / "runtime_data")) / "SentinelAI",
+        "THREATLENSAI_STATE_DIR",
+        os.environ.get(
+            "SENTINELAI_STATE_DIR",
+            Path(os.environ.get("LOCALAPPDATA", APP_DIR / "runtime_data")) / "ThreatLensAI",
+        ),
     )
 )
-DB_PATH = Path(os.environ.get("SENTINELAI_DB_PATH", DEFAULT_STATE_DIR / "sentinelai.db"))
+DB_PATH = Path(
+    os.environ.get("THREATLENSAI_DB_PATH")
+    or os.environ.get("SENTINELAI_DB_PATH")
+    or (PROJECT_DB_PATH if PROJECT_DB_PATH.exists() else DEFAULT_STATE_DIR / "threatlensai.db")
+)
+DB_AVAILABLE = True
+DB_ERROR = ""
 
 
 def get_connection():
@@ -107,6 +116,8 @@ def save_analysis(
     top_recommendations: list[str] | None = None,
     attack_timeline: list[dict[str, Any]] | None = None,
 ):
+    if not DB_AVAILABLE:
+        return None
     conn = get_connection()
     cursor = conn.cursor()
     now = datetime.now().isoformat()
@@ -172,6 +183,8 @@ def save_analysis(
 
 
 def save_uploaded_file(analysis_id, filename, file_size, file_type, line_count=0, flagged_count=0):
+    if not DB_AVAILABLE or analysis_id is None:
+        return
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute("""
@@ -194,6 +207,8 @@ def save_uploaded_file(analysis_id, filename, file_size, file_type, line_count=0
 
 
 def get_all_analyses(limit=50):
+    if not DB_AVAILABLE:
+        return []
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute("SELECT * FROM analyses ORDER BY created_at DESC LIMIT ?", (limit,))
@@ -203,6 +218,8 @@ def get_all_analyses(limit=50):
 
 
 def get_analysis_detail(analysis_id):
+    if not DB_AVAILABLE:
+        return {"analysis": {}, "findings": [], "files": []}
     conn = get_connection()
     cursor = conn.cursor()
 
@@ -224,6 +241,13 @@ def get_analysis_detail(analysis_id):
 
 
 def get_stats():
+    if not DB_AVAILABLE:
+        return {
+            "total_analyses": 0,
+            "by_severity": {},
+            "top_threats": [],
+            "avg_risk_score": 0,
+        }
     conn = get_connection()
     cursor = conn.cursor()
 
@@ -255,6 +279,8 @@ def get_stats():
 
 
 def delete_analysis(analysis_id):
+    if not DB_AVAILABLE:
+        return
     conn = get_connection()
     cursor = conn.cursor()
     cursor.execute("DELETE FROM analyses WHERE id = ?", (analysis_id,))
@@ -291,4 +317,8 @@ def _json_or_text(value: Any) -> str:
     return json.dumps(value or {}, ensure_ascii=False)
 
 
-init_db()
+try:
+    init_db()
+except (PermissionError, sqlite3.Error) as exc:
+    DB_AVAILABLE = False
+    DB_ERROR = str(exc)

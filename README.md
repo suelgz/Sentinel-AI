@@ -1,157 +1,160 @@
 # ThreatLens AI
 
-ThreatLens AI is a Streamlit-based cybersecurity analysis assistant that helps review uploaded logs and source code for common attack patterns. It combines deterministic rule-based detection with Gemini-powered analysis, then produces risk scoring, OWASP Top 10 mapping, MITRE ATT&CK mapping, remediation guidance, history storage, and exportable reports.
+ThreatLens AI is a focused Streamlit cybersecurity analysis assistant. It reviews logs and source-code snippets with a local regex/rule-based detector, then optionally uses Google Gemini API to explain findings, summarize risk, and suggest remediation.
 
-The project is designed for defensive security review, education, demos, and early triage. It does not perform live network scanning or exploitation.
+Built as a student cybersecurity AI project using Google Gemini API. Designed for defensive security education, early triage, and portfolio demonstration. Suitable for BTK Akademi / Google / Girişimcilik Vakfı style AI and entrepreneurship applications.
 
-## Live Demo
+This is not an official Google product.
 
-ThreatLens AI is ready to run on Streamlit Community Cloud. The Streamlit main file path is:
+## Main Features
+
+- Modern Streamlit interface with cyber/AI themed dashboard cards and analysis tabs
+- Local analysis works without any API key
+- Optional Gemini enrichment for executive summaries, technical explanations, business impact, false-positive notes, and remediation advice
+- Analysis modes:
+  - Local Scan Only
+  - Local + Gemini Explanation
+  - Full Gemini Report
+- English/Turkish language selector
+- Demo Mode with intentionally vulnerable Apache logs, PHP login code, and Flask code
+- Overall risk score from 0 to 100 with severity explanation and top risk factors
+- Findings mapped to OWASP Top 10 and MITRE ATT&CK when available
+- SQLite history for previous analyses
+- JSON and TXT report export
+
+## Minimal Tech Stack
+
+- Python
+- Streamlit
+- Google Gemini API
+- SQLite
+- Regex/rule-based local detection
+- JSON/TXT report export
+- Basic CSS inside Streamlit
+
+No FastAPI, Flask, React, Firebase, Supabase, MongoDB, LangChain, vector database, Docker, or authentication system is required.
+
+## Local Detection Coverage
+
+ThreatLens AI includes rule-based support for:
+
+- SQL Injection
+- XSS
+- Brute Force
+- Path Traversal
+- Command Injection
+- Suspicious User-Agent
+- Exposed Config Files
+- Sensitive File Access
+- Weak Cryptography
+- Hardcoded Secrets / Credentials
+
+Each finding can include threat type, severity, confidence, evidence, explanation, remediation, OWASP mapping, MITRE ATT&CK mapping, business impact, and false-positive notes.
+
+## Project Structure
 
 ```text
-sentinelai/app.py
+threatlensai/
+|-- app.py                  Streamlit app and UI workflow
+|-- gemini_client.py        Gemini prompts, JSON parsing, and fallback-safe calls
+|-- rule_detector.py        Regex/rule-based threat detection
+|-- risk_scoring.py         0-100 risk scoring
+|-- report_generator.py     TXT report generation
+|-- database.py             SQLite history storage
+|-- threat_knowledge.py     OWASP, MITRE, remediation, and impact metadata
+|-- log_parser.py           Apache/generic log parsing
+|-- i18n.py                 English/Turkish UI strings
+|-- sample_data/            Demo log and vulnerable code samples
+|-- requirements.txt        App dependencies
 ```
 
-For public demos, users can click Demo Mode to load sample Apache logs and run the local rule-based pre-scan without entering an API key. Gemini enrichment, executive summaries, and Turkish AI explanations require a Gemini API key.
-
-## What ThreatLens AI Does
-
-ThreatLens AI accepts a log file or code snippet and runs a two-stage analysis pipeline:
-
-1. Rule engine pre-scan flags suspicious evidence with regex and frequency-based detections.
-2. Gemini performs contextual analysis on the flagged evidence.
-3. Findings are enriched with OWASP Top 10, MITRE ATT&CK, confidence, remediation, business impact, and false-positive notes.
-4. A composite risk score is calculated from severity, rule confidence, Gemini confidence, pattern strength, frequency, and asset sensitivity.
-5. Results are stored in SQLite and can be exported as text or JSON reports.
-
-## Architecture Overview
-
-```text
-sentinelai/
-|-- app.py                  Streamlit dashboard and workflow orchestration
-|-- log_parser.py           Apache/generic log parsing and log statistics
-|-- rule_detector.py        Rule-based threat detection and confidence scoring
-|-- threat_knowledge.py     OWASP, MITRE, remediation, impact, recommendations
-|-- gemini_client.py        Gemini prompts, JSON parsing, AI enrichment
-|-- risk_scoring.py         Composite risk score and score breakdown
-|-- report_generator.py     Text report generation
-|-- database.py             SQLite history and migration helpers
-|-- sample_data/            Demo logs and vulnerable code samples
-|-- requirements.txt        Python dependencies
-```
-
-## Features
-
-- Log upload and code analysis through a Streamlit UI
-- Rule-based detections for:
-  - SQL Injection
-  - XSS
-  - Brute Force
-  - Path Traversal
-  - Command Injection
-  - Suspicious User-Agents
-  - Exposed Config Files
-  - Sensitive File Access
-  - Weak Cryptography
-  - Hardcoded Secrets
-- Rule confidence scoring for every rule-based finding
-- Gemini-powered deep analysis for suspicious evidence
-- OWASP Top 10 mapping
-- MITRE ATT&CK mapping per threat type
-- Immediate fix, long-term fix, business impact, and false-positive notes
-- Simple attack timeline from parsed log timestamps
-- Top recommendations generated from highest-risk findings
-- Composite risk score from 0 to 100
-- SQLite analysis history
-- Exportable text and JSON reports
-- English/Turkish UI labels, report labels, and explanation support
-- Demo Mode for loading sample logs without uploading a file
-- Gemini API key status messaging and local/Gemini readiness indicator
-- Mobile-friendly sidebar and layout adjustments
-
-## How To Run
+## How To Run Locally
 
 From the repository root:
 
 ```bash
-cd sentinelai
 python -m venv .venv
 .venv\Scripts\activate
 pip install -r requirements.txt
-streamlit run app.py
+streamlit run threatlensai/app.py
 ```
 
-On macOS/Linux, activate the virtual environment with:
+On macOS/Linux:
 
 ```bash
+python -m venv .venv
 source .venv/bin/activate
+pip install -r requirements.txt
+streamlit run threatlensai/app.py
 ```
 
-Then open the Streamlit URL shown in the terminal and paste your Gemini API key in the sidebar.
-
-## Streamlit Community Cloud Deployment
-
-1. Push the repository to GitHub.
-2. In Streamlit Community Cloud, create a new app from the repository.
-3. Set the main file path to `sentinelai/app.py`.
-4. Keep the Python dependencies in `sentinelai/requirements.txt`; the root `requirements.txt` points Streamlit Cloud to that file.
-5. Optional: add `GEMINI_API_KEY` in Streamlit app secrets for a prefilled private default key.
-6. Deploy the app.
-
-Do not commit API keys to GitHub. If no Streamlit secret is configured, users can paste their Gemini API key into the sidebar at runtime. The key is used only for the current Streamlit session and is not stored in the repository.
+Gemini API key is optional. Without a key, choose `Local Scan Only` or load Demo Mode and run local analysis.
 
 ## Gemini API Key
 
-ThreatLens AI uses Gemini for contextual analysis and executive summaries.
+ThreatLens AI loads the Gemini key from:
 
-1. Visit Google AI Studio.
-2. Create a Gemini API key.
-3. Paste the key into the ThreatLens AI sidebar.
-4. Click the validation button before running Gemini analysis.
+1. Streamlit secrets: `GEMINI_API_KEY`
+2. The sidebar password input field
 
-The rule engine can still show pre-scan signals, confidence, MITRE mapping, and remediation context before AI analysis.
+Do not commit API keys to GitHub. The sidebar key is used only for the active Streamlit session and is not stored by the app.
 
-## Sample Use Cases
+Gemini is used to enrich local findings, not replace them. If Gemini fails, the app falls back to local rule-based results.
 
-- Review Apache access logs for SQL injection, XSS, traversal, scanners, and brute force attempts.
-- Analyze a vulnerable PHP login form for SQL injection and hardcoded secrets.
-- Analyze a Flask snippet for weak secrets, command injection, or unsafe crypto usage.
-- Generate an executive report for a manager after an incident triage exercise.
-- Demonstrate OWASP Top 10 and MITRE ATT&CK mapping in a cybersecurity class or hackathon project.
+## Demo Mode
 
-## Report Contents
+Demo Mode works without a Gemini API key. It includes:
 
-Exported reports include:
+- Apache access log with SQL injection, XSS, brute force, path traversal, command injection, exposed config, and scanner examples
+- Vulnerable PHP login code
+- Vulnerable Flask snippet
 
-- Executive summary
+Use `Load Demo Data`, then `Run ThreatLens Analysis`.
+
+## Streamlit Community Cloud Deployment
+
+1. Push this repository to GitHub.
+2. In Streamlit Community Cloud, create a new app from the repository.
+3. Set the main file path to:
+
+```text
+threatlensai/app.py
+```
+
+4. Keep dependencies in `requirements.txt` at the repository root. It points to `threatlensai/requirements.txt`.
+5. Optional: add `GEMINI_API_KEY` in Streamlit app secrets.
+6. Deploy the app.
+
+If no Gemini secret is configured, users can still run local/demo analysis.
+
+## Report Export
+
+Reports include:
+
+- Project name and timestamp
+- Analysis mode
+- Whether Gemini was used
 - Overall risk score and severity
-- Top recommendations
-- Attack timeline when timestamps are available
-- Rule-based pre-scan signals and rule confidence
-- Detailed findings
-- OWASP Top 10 mapping
-- MITRE ATT&CK mapping
-- Evidence
-- Immediate and long-term recommended fixes
-- Business impact
-- False-positive notes
-- Prioritized next steps
+- Findings and evidence
+- OWASP and MITRE mapping
+- Remediation checklist
+- Executive summary
+- Ethical notice
+
+TXT and JSON exports are supported. PDF export is intentionally left for the roadmap unless a stable implementation is added later.
 
 ## Ethical Notice
 
-ThreatLens AI is intended only for defensive, educational, and authorized security analysis.
+ThreatLens AI is for defensive security review, education, and authorized analysis only.
 
-- Only analyze logs, code, and systems you own or have explicit permission to assess.
-- Do not use this project to attack, scan, or exploit third-party systems.
-- The sample data is intentionally vulnerable and exists only for demonstration.
-- Findings may include false positives and should be validated before production changes.
+Do not use this project for exploitation, live attacks, unauthorized scanning, phishing, malware generation, credential theft, or activity against systems you do not own or have explicit permission to assess.
+
+Findings may include false positives. Validate results before production changes or incident response decisions.
 
 ## Roadmap
 
-- Add more log formats, including Nginx, auth.log, Windows Event exports, and JSON logs.
-- Add SARIF export for CI/security tooling.
-- Add optional PDF/HTML report export.
-- Add CVSS-style scoring details.
-- Add rule tuning profiles for web apps, APIs, and authentication logs.
-- Add analyst feedback to mark findings as true positive or false positive.
-- Add automated regression tests for detector patterns and risk scoring.
+- Add more log formats such as Nginx, auth.log, Windows Event exports, and JSON logs
+- Add SARIF export for security tooling
+- Add optional PDF/HTML report export if stable
+- Add more detector tests and sample cases
+- Add analyst feedback for true positive / false positive tracking
