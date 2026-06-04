@@ -176,6 +176,13 @@ def init_state() -> None:
         st.session_state.setdefault(key, value)
 
 
+def clear_analysis_input() -> None:
+    st.session_state["input_text"] = ""
+    st.session_state["input_name"] = "manual-input"
+    st.session_state["result"] = None
+    st.session_state["last_upload_name"] = ""
+
+
 def read_sample(sample_name: str) -> tuple[str, str]:
     samples = {
         "Apache Log": ("demo_apache_attack.txt", "demo-apache-attack.txt"),
@@ -762,10 +769,7 @@ run_col, clear_col = st.columns([2, 1])
 with run_col:
     run_clicked = st.button("🚀 Run ThreatLens Analysis", type="primary", use_container_width=True)
 with clear_col:
-    if st.button(t("clear"), use_container_width=True):
-        st.session_state["input_text"] = ""
-        st.session_state["result"] = None
-        st.rerun()
+    st.button(t("clear"), use_container_width=True, on_click=clear_analysis_input)
 
 if run_clicked:
     try:
