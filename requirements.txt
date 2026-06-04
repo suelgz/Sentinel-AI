@@ -1,1 +1,1 @@
--r sentinelai/requirements.txt
+-r threatlensai/requirements.txt

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -8,8 +9,12 @@ from i18n import APP_NAME, translate_text
 from threat_knowledge import format_mitre_attack, generate_top_recommendations
 
 
-EXPORTS_DIR = Path(__file__).parent / "exports"
-EXPORTS_DIR.mkdir(exist_ok=True)
+EXPORTS_DIR = Path(
+    os.environ.get(
+        "THREATLENSAI_EXPORTS_DIR",
+        Path(os.environ.get("LOCALAPPDATA", Path(__file__).parent / "runtime_data")) / "ThreatLensAI" / "exports",
+    )
+)
 
 SEVERITY_MARKERS = {
     "Critical": "[CRITICAL]",
@@ -49,6 +54,8 @@ def build_text_report(
     rule_findings: list[dict[str, Any]] | None = None,
     attack_timeline: list[dict[str, Any]] | None = None,
     top_recommendations: list[str] | None = None,
+    analysis_mode: str = "",
+    gemini_used: bool = False,
 ) -> str:
     lines: list[str] = []
     sep = "=" * 78
@@ -64,6 +71,9 @@ def build_text_report(
     lines.append(sep)
     lines.append(f"{_rt(language, 'generated'):<14}: {now}")
     lines.append(f"{_rt(language, 'analysis_type_label'):<14}: {analysis_type.upper()}")
+    if analysis_mode:
+        lines.append(f"{_rt(language, 'analysis_mode'):<14}: {analysis_mode}")
+    lines.append(f"{_rt(language, 'gemini_used'):<14}: {_rt(language, 'yes') if gemini_used else _rt(language, 'no')}")
     lines.append(f"{_rt(language, 'source_label'):<14}: {input_name}")
     lines.append(f"{_rt(language, 'risk_score_label'):<14}: {risk_score}/100")
     lines.append(f"{_rt(language, 'severity'):<14}: {marker} {severity_label}")
@@ -77,6 +87,7 @@ def build_text_report(
     _append_attack_timeline(lines, attack_timeline or [], language)
     _append_rule_pre_scan(lines, rule_findings, language)
     _append_detailed_findings(lines, findings, language)
+    _append_remediation_checklist(lines, top_recommendations, language)
     _append_references(lines, findings, rule_findings, language)
 
     lines.append(sep)
@@ -91,6 +102,7 @@ def build_text_report(
 
 def save_text_report(content: str, prefix: str = "report") -> Path:
     filename = f"{prefix}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
+    EXPORTS_DIR.mkdir(parents=True, exist_ok=True)
     path = EXPORTS_DIR / filename
     path.write_text(content, encoding="utf-8")
     return path
@@ -213,6 +225,17 @@ def _append_detailed_findings(lines: list[str], findings: list[dict[str, Any]], 
         if false_positive:
             _append_wrapped_block(lines, _rt(language, "false_positive_note"), false_positive)
         lines.append("-" * 78)
+
+
+def _append_remediation_checklist(lines: list[str], recommendations: list[str], language: str) -> None:
+    lines.append(_rt(language, "remediation_checklist").upper())
+    lines.append("-" * 78)
+    if not recommendations:
+        lines.append(_rt(language, "no_recommendations"))
+    else:
+        for item in recommendations:
+            lines.append(f"[ ] {item}")
+    lines.append("")
 
 
 def _append_references(
