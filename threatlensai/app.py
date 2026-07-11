@@ -293,7 +293,7 @@ with st.sidebar:
     st.markdown("## 🛡️ ThreatLens AI")
     
     selected_language = st.selectbox(
-        "Language / Dil",
+        "Language",
         list(LANGUAGES.keys()),
         index=0 if st.session_state["language"] == "en" else 1,
     )
