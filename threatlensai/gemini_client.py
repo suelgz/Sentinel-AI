@@ -10,6 +10,7 @@ from threat_knowledge import enrich_finding
 
 
 MODEL_NAME = "gemini-2.0-flash"
+REQUEST_TIMEOUT_MS = 20000
 
 LANGUAGE_NAMES = {
     "en": "English",
@@ -22,7 +23,10 @@ class GeminiAPIError(RuntimeError):
 
 
 def _get_client(api_key: str):
-    return genai.Client(api_key=api_key)
+    return genai.Client(
+        api_key=api_key.strip(),
+        http_options=types.HttpOptions(timeout=REQUEST_TIMEOUT_MS),
+    )
 
 
 def _extract_json(text: str):
@@ -183,6 +187,7 @@ Bu yapiyi dondur:
 
 
 def _call_gemini(api_key: str, prompt: str) -> str:
+    api_key = (api_key or "").strip()
     if not api_key:
         raise GeminiAPIError("Gemini API key is missing.")
     client = _get_client(api_key)
