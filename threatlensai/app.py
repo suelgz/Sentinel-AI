@@ -294,7 +294,6 @@ with st.sidebar:
     
     selected_language = st.selectbox(
         "Language",
-        list(LANGUAGES.keys()),
         index=0 if st.session_state["language"] == "en" else 1,
     )
     st.session_state["language"] = LANGUAGES[selected_language]
