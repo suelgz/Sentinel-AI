@@ -151,10 +151,3 @@ Do not use this project for exploitation, live attacks, unauthorized scanning, p
 
 Findings may include false positives. Validate results before production changes or incident response decisions.
 
-## Roadmap
-
-- Add more log formats such as Nginx, auth.log, Windows Event exports, and JSON logs
-- Add SARIF export for security tooling
-- Add optional PDF/HTML report export if stable
-- Add more detector tests and sample cases
-- Add analyst feedback for true positive / false positive tracking
