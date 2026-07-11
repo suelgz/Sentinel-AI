@@ -321,8 +321,7 @@ with st.sidebar:
         INPUT_TYPES,
         index=INPUT_TYPES.index(st.session_state.get("input_type", INPUT_TYPES[0])),
     )
-    st.session_state["demo_mode"] = st.toggle("🧪 Demo Mode", value=st.session_state.get("demo_mode", True))
-    st.caption(t("sidebar_note") if "sidebar_note" in dir() else "Select your analysis preferences")
+   
 
 
 # ============================================================================
