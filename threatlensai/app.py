@@ -27,7 +27,7 @@ from threat_knowledge import (
 SAMPLE_DATA_DIR = Path(__file__).parent / "sample_data"
 ANALYSIS_MODES = ["Local Scan Only", "Local + Gemini Explanation", "Full Gemini Report"]
 INPUT_TYPES = ["Apache Log", "PHP Code", "Flask Code", "Custom Code"]
-LANGUAGES = {"English": "en", "Turkish": "tr"}
+LANGUAGES = {"English": "en"}
 
 
 st.set_page_config(
