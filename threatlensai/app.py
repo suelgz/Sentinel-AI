@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import html
 import json
+import sys
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -9,19 +10,44 @@ from typing import Any
 import pandas as pd
 import streamlit as st
 
-from database import delete_analysis, get_all_analyses, get_analysis_detail, save_analysis, save_uploaded_file
-from gemini_client import GeminiAPIError, analyze_code, analyze_logs, generate_executive_summary
-from i18n import APP_NAME, translate_text
-from log_parser import get_log_stats, parse_log_file
-from report_generator import build_text_report
-from risk_scoring import compute_risk_score, get_score_breakdown, get_severity_color
-from rule_detector import get_flagged_content_for_gemini, run_rule_detection, summarize_rule_findings
-from threat_knowledge import (
-    build_attack_timeline,
-    format_mitre_attack,
-    generate_top_recommendations,
-    merge_rule_and_gemini_findings,
-)
+APP_DIR = Path(__file__).resolve().parent
+if str(APP_DIR) not in sys.path:
+    sys.path.insert(0, str(APP_DIR))
+
+try:
+    from database import delete_analysis, get_all_analyses, get_analysis_detail, save_analysis, save_uploaded_file
+    from gemini_client import GeminiAPIError, analyze_code, analyze_logs, generate_executive_summary
+    from i18n import APP_NAME, translate_text
+    from log_parser import get_log_stats, parse_log_file
+    from report_generator import build_text_report
+    from risk_scoring import compute_risk_score, get_score_breakdown, get_severity_color
+    from rule_detector import get_flagged_content_for_gemini, run_rule_detection, summarize_rule_findings
+    from threat_knowledge import (
+        build_attack_timeline,
+        format_mitre_attack,
+        generate_top_recommendations,
+        merge_rule_and_gemini_findings,
+    )
+except ModuleNotFoundError:
+    from threatlensai.database import (
+        delete_analysis,
+        get_all_analyses,
+        get_analysis_detail,
+        save_analysis,
+        save_uploaded_file,
+    )
+    from threatlensai.gemini_client import GeminiAPIError, analyze_code, analyze_logs, generate_executive_summary
+    from threatlensai.i18n import APP_NAME, translate_text
+    from threatlensai.log_parser import get_log_stats, parse_log_file
+    from threatlensai.report_generator import build_text_report
+    from threatlensai.risk_scoring import compute_risk_score, get_score_breakdown, get_severity_color
+    from threatlensai.rule_detector import get_flagged_content_for_gemini, run_rule_detection, summarize_rule_findings
+    from threatlensai.threat_knowledge import (
+        build_attack_timeline,
+        format_mitre_attack,
+        generate_top_recommendations,
+        merge_rule_and_gemini_findings,
+    )
 
 
 SAMPLE_DATA_DIR = Path(__file__).parent / "sample_data"
