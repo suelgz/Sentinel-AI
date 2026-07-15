@@ -50,7 +50,6 @@ def init_db():
             severity_label TEXT,
             total_findings INTEGER DEFAULT 0,
             executive_summary TEXT,
-            language TEXT DEFAULT 'en',
             top_recommendations TEXT,
             attack_timeline TEXT
         );
@@ -112,7 +111,6 @@ def save_analysis(
     severity_label,
     findings: list,
     executive_summary="",
-    language="en",
     top_recommendations: list[str] | None = None,
     attack_timeline: list[dict[str, Any]] | None = None,
 ):
@@ -126,9 +124,9 @@ def save_analysis(
         INSERT INTO analyses (
             created_at, analysis_type, input_filename, input_preview,
             overall_risk_score, severity_label, total_findings,
-            executive_summary, language, top_recommendations, attack_timeline
+            executive_summary, top_recommendations, attack_timeline
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
         now,
         analysis_type,
@@ -138,7 +136,6 @@ def save_analysis(
         severity_label,
         len(findings),
         _json_or_text(executive_summary),
-        language,
         json.dumps(top_recommendations or [], ensure_ascii=False),
         json.dumps(attack_timeline or [], ensure_ascii=False),
     ))

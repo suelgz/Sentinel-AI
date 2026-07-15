@@ -10,6 +10,8 @@ from typing import Any
 import pandas as pd
 import streamlit as st
 
+APP_NAME = "ThreatLens AI"
+
 APP_DIR = Path(__file__).resolve().parent
 if str(APP_DIR) not in sys.path:
     sys.path.insert(0, str(APP_DIR))
@@ -17,7 +19,6 @@ if str(APP_DIR) not in sys.path:
 try:
     from database import delete_analysis, get_all_analyses, get_analysis_detail, save_analysis, save_uploaded_file
     from gemini_client import GeminiAPIError, analyze_code, analyze_logs, generate_executive_summary
-    from i18n import APP_NAME, translate_text
     from log_parser import get_log_stats, parse_log_file
     from report_generator import build_text_report
     from risk_scoring import compute_risk_score, get_score_breakdown, get_severity_color
@@ -37,7 +38,6 @@ except ModuleNotFoundError:
         save_uploaded_file,
     )
     from threatlensai.gemini_client import GeminiAPIError, analyze_code, analyze_logs, generate_executive_summary
-    from threatlensai.i18n import APP_NAME, translate_text
     from threatlensai.log_parser import get_log_stats, parse_log_file
     from threatlensai.report_generator import build_text_report
     from threatlensai.risk_scoring import compute_risk_score, get_score_breakdown, get_severity_color
@@ -53,7 +53,6 @@ except ModuleNotFoundError:
 SAMPLE_DATA_DIR = Path(__file__).parent / "sample_data"
 ANALYSIS_MODES = ["Local Scan Only", "Local + Gemini Explanation", "Full Gemini Report"]
 INPUT_TYPES = ["Apache Log", "PHP Code", "Flask Code", "Custom Code"]
-LANGUAGES = {"English": "en", "Turkish": "tr"}
 
 
 st.set_page_config(
@@ -175,9 +174,6 @@ st.markdown(
 )
 
 
-def t(key: str, **kwargs: Any) -> str:
-    return translate_text(key, st.session_state.get("language", "en"), **kwargs)
-
 
 def get_secret_api_key() -> str:
     try:
@@ -188,7 +184,6 @@ def get_secret_api_key() -> str:
 
 def init_state() -> None:
     defaults = {
-        "language": "en",
         "analysis_mode": ANALYSIS_MODES[1],
         "input_type": INPUT_TYPES[0],
         "demo_mode": True,
@@ -264,7 +259,7 @@ def decode_upload(uploaded_file: Any) -> str:
     except UnicodeDecodeError:
         return uploaded_file.getvalue().decode("latin-1", errors="replace")
     except Exception as exc:
-        st.error(t("invalid_file", error=str(exc)))
+        st.error(f"Could not read uploaded file: {exc}")
         return ""
 
 
@@ -282,30 +277,17 @@ def severity_style(severity: str) -> tuple[str, str]:
 
 def score_explanation(score: int, severity: str, findings: list[dict[str, Any]]) -> str:
     if score == 0:
-        return t("score_clean")
+        return "No local indicators were detected, so the score remains clean. Continue validating with real context."
     high_count = sum(1 for item in findings if item.get("severity") in {"Critical", "High"})
     if severity in {"Critical", "High"}:
-        return t("score_high", count=high_count)
+        return f"The score is elevated because {high_count} high or critical finding(s) affect sensitive attack paths."
     if severity == "Medium":
-        return t("score_medium")
-    return t("score_low")
+        return "The score is medium because one or more findings need validation and remediation planning."
+    return "The score is low because the detected patterns have limited severity or confidence."
 
 
-def local_summary(severity: str, score: int, findings: list[dict[str, Any]], language: str) -> dict[str, Any]:
+def local_summary(severity: str, score: int, findings: list[dict[str, Any]]) -> dict[str, Any]:
     recommendations = generate_top_recommendations(findings, limit=3)
-    if language == "tr":
-        if findings:
-            paragraph = f"Yerel kural analizi {len(findings)} bulgu tespit etti. Genel risk skoru {score}/100 ve seviye {severity} olarak hesaplandı."
-        else:
-            paragraph = "Yerel kural analizi belirgin bir tehdit işareti bulmadı."
-        return {
-            "overall_status": severity,
-            "summary_paragraph": paragraph,
-            "top_priority_action": recommendations[0] if recommendations else "Log ve kodu düzenli olarak gözden geçirin.",
-            "estimated_business_risk": "Risk, bulguların gerçek sistemlere ulaşıp ulaşmadığına göre değişir.",
-            "positive_notes": "Analiz Gemini API anahtarı olmadan yerel kurallarla tamamlandı.",
-            "recommended_next_steps": recommendations or ["Bulguları doğrulayın", "Gerekli düzeltmeleri uygulayın", "Tekrar analiz çalıştırın"],
-        }
     if findings:
         paragraph = f"Local rule analysis detected {len(findings)} finding(s). Overall risk is {score}/100 with a {severity} severity label."
     else:
@@ -325,13 +307,12 @@ def run_threatlens_analysis(
     input_type: str,
     input_name: str,
     mode: str,
-    language: str,
     api_key: str,
 ) -> dict[str, Any]:
     content = (content or "").strip()
     api_key = (api_key or "").strip()
     if not content:
-        raise ValueError(t("empty_input"))
+        raise ValueError("Add input text, upload a file, or load demo data before running analysis.")
 
     is_log = input_type == "Apache Log"
     if is_log:
@@ -356,9 +337,9 @@ def run_threatlens_analysis(
     if should_send_to_gemini:
         try:
             if is_log:
-                gemini_findings = analyze_logs(flagged_content, pre_labels, api_key, language=language)
+                gemini_findings = analyze_logs(flagged_content, pre_labels, api_key)
             else:
-                gemini_findings = analyze_code(flagged_content, code_language, pre_labels, api_key, language=language)
+                gemini_findings = analyze_code(flagged_content, code_language, pre_labels, api_key)
             gemini_used = True
         except GeminiAPIError as exc:
             gemini_error = str(exc)
@@ -370,10 +351,10 @@ def run_threatlens_analysis(
 
     if should_send_to_gemini and gemini_used and mode == "Full Gemini Report":
         executive_summary = generate_executive_summary(
-            findings, risk_score, severity, api_key, language=language
+            findings, risk_score, severity, api_key
         )
     else:
-        executive_summary = local_summary(severity, risk_score, findings, language)
+        executive_summary = local_summary(severity, risk_score, findings)
 
     analysis_type = "log" if is_log else "code"
     analysis_id = save_analysis(
@@ -384,7 +365,6 @@ def run_threatlens_analysis(
         severity,
         findings,
         executive_summary=executive_summary,
-        language=language,
         top_recommendations=top_recommendations,
         attack_timeline=attack_timeline,
     )
@@ -419,7 +399,7 @@ def run_threatlens_analysis(
     }
 
 
-def build_json_export(result: dict[str, Any], language: str) -> str:
+def build_json_export(result: dict[str, Any]) -> str:
     payload = {
         "project_name": APP_NAME,
         "timestamp": datetime.now().isoformat(timespec="seconds"),
@@ -436,7 +416,7 @@ def build_json_export(result: dict[str, Any], language: str) -> str:
             if item.get("mitre_attack")
         }),
         "remediation_checklist": result.get("top_recommendations", []),
-        "ethical_notice": translate_text("ethical_notice_body", language),
+        "ethical_notice": "ThreatLens AI is for defensive security review, education, and authorized analysis only. It must not be used for exploitation, live attacks, unauthorized scanning, phishing, malware generation, credential theft, or any activity against systems you do not own or have permission to assess.",
     }
     return json.dumps(payload, indent=2, ensure_ascii=False)
 
@@ -471,7 +451,7 @@ def render_finding(finding: dict[str, Any], index: int) -> None:
     <span class="tl-badge" style="{badge_style}">{html.escape(severity)}</span>
   </div>
   <div class="tl-muted" style="margin-top:6px">
-    Confidence: {confidence}% AI / {rule_confidence}% Rule · Source: {html.escape(str(finding.get("analysis_source", "Rule Engine")))}
+    Confidence: {confidence}% AI / {rule_confidence}% Rule - Source: {html.escape(str(finding.get("analysis_source", "Rule Engine")))}
   </div>
   <div class="tl-muted" style="margin-top:6px">
     OWASP: {html.escape(str(finding.get("owasp_category", "N/A")))}<br>
@@ -482,20 +462,20 @@ def render_finding(finding: dict[str, Any], index: int) -> None:
         unsafe_allow_html=True,
     )
 
-    with st.expander(f"📌 {t('evidence_and_remediation')} #{index}", expanded=index == 1):
+    with st.expander(f"Evidence & Remediation #{index}", expanded=index == 1):
         st.markdown(f'<div class="tl-evidence">{evidence}</div>', unsafe_allow_html=True)
         left, right = st.columns(2)
         with left:
-            st.markdown(f"**{t('technical_explanation')}**")
+            st.markdown("**Technical Explanation**")
             st.write(finding.get("explanation", "N/A"))
-            st.markdown(f"**{t('business_impact')}**")
+            st.markdown("**Business Impact**")
             st.warning(finding.get("business_impact", "N/A"))
         with right:
-            st.markdown(f"**{t('immediate_fix')}**")
+            st.markdown("**Immediate Fix**")
             st.success(finding.get("immediate_fix", "N/A"))
-            st.markdown(f"**{t('long_term_fix')}**")
+            st.markdown("**Long-Term Fix**")
             st.info(finding.get("long_term_fix", "N/A"))
-            st.caption(f"{t('false_positive_note')}: {finding.get('false_positive_note', 'N/A')}")
+            st.caption(f"False Positive Note: {finding.get('false_positive_note', 'N/A')}")
 
 
 def render_results_tabs(result: dict[str, Any], api_key: str) -> None:
@@ -509,19 +489,19 @@ def render_results_tabs(result: dict[str, Any], api_key: str) -> None:
 
     tab_overview, tab_findings, tab_ai, tab_mapping, tab_report, tab_history = st.tabs(
         [
-            f"📊 {t('overview')}",
-            f"🚨 {t('findings')}",
-            f"🧠 {t('gemini_ai_explanation')}",
-            f"🧭 {t('owasp_mitre_mapping')}",
-            f"🧾 {t('report')}",
-            f"🕘 {t('history')}",
+            "Overview",
+            "Findings",
+            "Gemini AI Explanation",
+            "OWASP / MITRE Mapping",
+            "Report",
+            "History",
         ]
     )
 
     with tab_overview:
         left, right = st.columns([1, 2])
         with left:
-            st.markdown("### 📊 Risk Score")
+            st.markdown("### Risk Score")
             st.progress(min(risk_score, 100) / 100)
             st.markdown(
                 f"<div style='font-size:3rem;font-weight:900;color:{get_severity_color(severity)}'>{risk_score}/100</div>",
@@ -529,27 +509,27 @@ def render_results_tabs(result: dict[str, Any], api_key: str) -> None:
             )
             st.markdown(f"**{severity}**")
         with right:
-            st.markdown(f"### ✨ {t('executive_summary')}")
-            st.write(summary.get("summary_paragraph", t("summary_not_available")))
-            st.markdown(f"**{t('score_reason')}**")
+            st.markdown("### Executive Summary")
+            st.write(summary.get("summary_paragraph", "Executive summary is not available."))
+            st.markdown("**Why this score?**")
             st.info(score_explanation(risk_score, severity, findings))
-            st.markdown(f"**{t('top_risk_factors')}**")
+            st.markdown("**Top risk factors**")
             if top_recommendations:
                 for item in top_recommendations[:5]:
                     st.markdown(f"- {item}")
             else:
-                st.success(t("no_recommendations"))
+                st.success("No prioritized remediation items are available.")
 
-        st.markdown("### 🧪 Analysis Details")
+        st.markdown("### Analysis Details")
         c1, c2, c3, c4 = st.columns(4)
-        c1.metric(t("rule_signals"), len(rule_findings))
-        c2.metric(t("flagged_lines"), breakdown.get("flagged_lines_count", 0))
-        c3.metric(t("avg_confidence"), f"{int(breakdown.get('avg_gemini_confidence', 0) * 100)}%")
-        c4.metric(t("analysis_id"), str(result.get("analysis_id", "-")))
+        c1.metric("Rule Signals", len(rule_findings))
+        c2.metric("Flagged Lines", breakdown.get("flagged_lines_count", 0))
+        c3.metric("Avg Confidence", f"{int(breakdown.get('avg_gemini_confidence', 0) * 100)}%")
+        c4.metric("Analysis ID", str(result.get("analysis_id", "-")))
 
     with tab_findings:
         if not findings:
-            st.success(t("no_threats_detected"))
+            st.success("No threats detected by the current local rules.")
         else:
             for index, finding in enumerate(findings, 1):
                 render_finding(finding, index)
@@ -557,43 +537,41 @@ def render_results_tabs(result: dict[str, Any], api_key: str) -> None:
     with tab_ai:
         status, level = status_text(api_key, result)
         getattr(st, level)(status)
-        st.markdown(f"### ✨ {t('executive_summary')}")
-        st.write(summary.get("summary_paragraph", t("summary_not_available")))
+        st.markdown("### Executive Summary")
+        st.write(summary.get("summary_paragraph", "Executive summary is not available."))
         col1, col2 = st.columns(2)
         with col1:
-            st.markdown(f"**{t('top_priority_action')}**")
+            st.markdown("**Top Priority Action**")
             st.warning(summary.get("top_priority_action", "N/A"))
-            st.markdown(f"**{t('business_risk')}**")
+            st.markdown("**Business Risk**")
             st.write(summary.get("estimated_business_risk", "N/A"))
         with col2:
-            st.markdown(f"**🧬 {t('attack_narrative')}**")
+            st.markdown("**Attack Narrative**")
             if result.get("attack_timeline"):
                 first = result["attack_timeline"][0]
                 last = result["attack_timeline"][-1]
                 st.write(
-                    t(
-                        "timeline_narrative",
-                        first=first.get("threat_type", "unknown"),
-                        last=last.get("threat_type", "unknown"),
-                    )
+                    f"The visible chain starts with {first.get('threat_type', 'unknown')} and later includes {last.get('threat_type', 'unknown')}. Treat this as a triage narrative, not proof of compromise."
                 )
             elif findings:
-                st.write(t("findings_narrative", count=len(findings)))
+                st.write(
+                    f"ThreatLens identified {len(findings)} finding(s). Review the evidence, confirm true positives, and prioritize fixes by severity."
+                )
             else:
-                st.write(t("clean_narrative"))
-            st.markdown(f"**{t('recommended_next_steps')}**")
+                st.write("No clear attack chain is visible in this input.")
+            st.markdown("**Recommended Next Steps**")
             for step in summary.get("recommended_next_steps", []):
                 st.markdown(f"- {step}")
 
     with tab_mapping:
         if not findings:
-            st.info(t("mapping_empty"))
+            st.info("No mapping is available because no findings were detected.")
         else:
             rows = []
             for item in findings:
                 rows.append(
                     {
-                        t("threat_type"): item.get("threat_type", "Unknown"),
+                        "Threat Type": item.get("threat_type", "Unknown"),
                         "Severity": item.get("severity", "Unknown"),
                         "OWASP": item.get("owasp_category", "N/A"),
                         "MITRE ATT&CK": item.get("mitre_attack_summary")
@@ -603,7 +581,7 @@ def render_results_tabs(result: dict[str, Any], api_key: str) -> None:
             st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
 
         if result.get("attack_timeline"):
-            st.markdown(f"### 🧬 {t('attack_timeline')}")
+            st.markdown("### Attack Timeline")
             st.dataframe(pd.DataFrame(result["attack_timeline"]), use_container_width=True, hide_index=True)
 
     with tab_report:
@@ -614,26 +592,25 @@ def render_results_tabs(result: dict[str, Any], api_key: str) -> None:
             severity,
             findings,
             summary,
-            language=st.session_state["language"],
             rule_findings=rule_findings,
             attack_timeline=result.get("attack_timeline", []),
             top_recommendations=top_recommendations,
             analysis_mode=result.get("analysis_mode", ""),
             gemini_used=result.get("gemini_used", False),
         )
-        json_report = build_json_export(result, st.session_state["language"])
-        st.text_area(t("report_preview"), text_report, height=300)
+        json_report = build_json_export(result)
+        st.text_area("Report Preview", text_report, height=300)
         col_txt, col_json = st.columns(2)
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         col_txt.download_button(
-            "🧾 Download TXT Report",
+            "Download TXT Report",
             data=text_report,
             file_name=f"threatlens_ai_report_{timestamp}.txt",
             mime="text/plain",
             use_container_width=True,
         )
         col_json.download_button(
-            "🧾 Download JSON Report",
+            "Download JSON Report",
             data=json_report,
             file_name=f"threatlens_ai_report_{timestamp}.json",
             mime="application/json",
@@ -647,22 +624,22 @@ def render_results_tabs(result: dict[str, Any], api_key: str) -> None:
 def render_history() -> None:
     analyses = get_all_analyses(25)
     if not analyses:
-        st.info(t("history_empty"))
+        st.info("No saved analyses yet.")
         return
     for item in analyses:
         label = (
-            f"{item.get('created_at', '')[:16].replace('T', ' ')} · "
-            f"{item.get('input_filename', 'input')} · "
-            f"{item.get('severity_label', 'Clean')} · {item.get('overall_risk_score', 0)}/100"
+            f"{item.get('created_at', '')[:16].replace('T', ' ')} - "
+            f"{item.get('input_filename', 'input')} - "
+            f"{item.get('severity_label', 'Clean')} - {item.get('overall_risk_score', 0)}/100"
         )
         with st.expander(label):
             detail = get_analysis_detail(item["id"])
-            st.caption(f"{t('findings')}: {len(detail.get('findings', []))}")
+            st.caption(f"Findings: {len(detail.get('findings', []))}")
             for finding in detail.get("findings", [])[:5]:
-                st.markdown(f"- **{finding.get('threat_type', 'Unknown')}** · {finding.get('severity', 'Unknown')}")
+                st.markdown(f"- **{finding.get('threat_type', 'Unknown')}** - {finding.get('severity', 'Unknown')}")
             col1, col2 = st.columns([1, 1])
             with col1:
-                if st.button(t("load_history"), key=f"load_{item['id']}"):
+                if st.button("Load", key=f"load_{item['id']}"):
                     st.session_state.result = {
                         "analysis_id": item["id"],
                         "analysis_type": item.get("analysis_type", ""),
@@ -680,7 +657,7 @@ def render_history() -> None:
                     }
                     st.rerun()
             with col2:
-                if st.button(t("delete"), key=f"delete_{item['id']}"):
+                if st.button("Delete", key=f"delete_{item['id']}"):
                     delete_analysis(item["id"])
                     st.rerun()
 
@@ -694,49 +671,44 @@ def _safe_json(value: Any, default: Any) -> Any:
         return default
 
 
+
 init_state()
 
 with st.sidebar:
-    st.markdown("## 🛡️ ThreatLens AI")
-    selected_language = st.selectbox(
-        "Language / Dil",
-        list(LANGUAGES.keys()),
-        index=0 if st.session_state["language"] == "en" else 1,
-    )
-    st.session_state["language"] = LANGUAGES[selected_language]
+    st.markdown("## ThreatLens AI")
 
-    st.markdown("### 🔑 Gemini API")
+    st.markdown("### Gemini API")
     st.session_state["api_key"] = st.text_input(
-        t("gemini_api_key"),
+        "Gemini API Key",
         value=st.session_state.get("api_key", ""),
         type="password",
         placeholder="AIza...",
-        help=t("api_key_help"),
+        help="Load from Streamlit secrets with GEMINI_API_KEY or paste a key for this session. The key is never stored by the app.",
     )
     status, level = status_text(st.session_state["api_key"], st.session_state.get("result"))
     getattr(st, level)(status)
 
-    st.markdown("### ⚙️ Analysis")
+    st.markdown("### Analysis")
     st.session_state["analysis_mode"] = st.selectbox(
-        t("analysis_mode"),
+        "Analysis Mode",
         ANALYSIS_MODES,
         index=ANALYSIS_MODES.index(st.session_state.get("analysis_mode", ANALYSIS_MODES[1])),
     )
     st.session_state["input_type"] = st.selectbox(
-        t("input_type"),
+        "Input Type",
         INPUT_TYPES,
         index=INPUT_TYPES.index(st.session_state.get("input_type", INPUT_TYPES[0])),
     )
-    st.session_state["demo_mode"] = st.toggle("🧪 Demo Mode", value=st.session_state.get("demo_mode", True))
-    st.caption(t("sidebar_note"))
+    st.session_state["demo_mode"] = st.toggle("Demo Mode", value=st.session_state.get("demo_mode", True))
+    st.caption("Gemini enriches local findings; local scan still works without a key.")
 
 
 st.markdown(
-    f"""
+    """
 <div class="tl-hero">
-  <div class="tl-title">🛡️ ThreatLens AI</div>
+  <div class="tl-title">ThreatLens AI</div>
   <div class="tl-subtitle">Gemini-Powered Cybersecurity Risk Analyzer</div>
-  <div class="tl-muted">{t("hero_description")}</div>
+  <div class="tl-muted">ThreatLens AI combines local regex/rule-based detection with optional Gemini explanations, summaries, remediation advice, and OWASP/MITRE context for defensive security review.</div>
 </div>
 """,
     unsafe_allow_html=True,
@@ -755,68 +727,67 @@ card1, card2, card3, card4, card5 = st.columns(5)
 with card1:
     render_metric_card("Overall Risk Score", f"{result.get('risk_score', 0) if result else 0}/100", result.get("severity", "Clean") if result else "Clean")
 with card2:
-    render_metric_card("Total Findings", str(total_findings), t("local_and_ai"))
+    render_metric_card("Total Findings", str(total_findings), "Local + optional Gemini")
 with card3:
-    render_metric_card("High/Critical", str(high_findings), t("priority_items"))
+    render_metric_card("High/Critical", str(high_findings), "Needs fast review")
 with card4:
-    render_metric_card("Gemini Status", status.split(":")[0], t("optional_enrichment"))
+    render_metric_card("Gemini Status", status.split(":")[0], "Optional enrichment")
 with card5:
     render_metric_card("Analysis Mode", st.session_state["analysis_mode"], st.session_state["input_type"])
 
 
-st.markdown(f"## 🛡️ {t('threat_detection')}")
+st.markdown("## Threat Detection")
 top_left, top_right = st.columns([2, 1])
 with top_right:
-    st.markdown(f"### 🧪 {t('demo_mode')}")
-    if st.button("🧪 Load Demo Data", use_container_width=True):
+    st.markdown("### Demo Mode")
+    if st.button("Load Demo Data", use_container_width=True):
         demo_text, demo_name = read_sample(st.session_state["input_type"])
         st.session_state["input_text"] = demo_text
         st.session_state["input_name"] = demo_name
         st.rerun()
-    st.caption(t("demo_help"))
+    st.caption("Loads intentionally vulnerable sample logs or code so the app can be demonstrated without uploading a file.")
 
 with top_left:
-    uploaded_file = st.file_uploader(t("upload_optional"), type=["txt", "log", "py", "php", "js", "json", "conf"])
+    uploaded_file = st.file_uploader("Upload log/code file (optional)", type=["txt", "log", "py", "php", "js", "json", "conf"])
     if uploaded_file and uploaded_file.name != st.session_state.get("last_upload_name"):
         st.session_state["input_text"] = decode_upload(uploaded_file)
         st.session_state["input_name"] = uploaded_file.name
         st.session_state["last_upload_name"] = uploaded_file.name
         st.rerun()
 
-    st.text_input(t("input_name"), key="input_name")
+    st.text_input("Input name", key="input_name")
     st.text_area(
-        t("input_text"),
+        "Log or code input",
         key="input_text",
         height=260,
-        placeholder=t("input_placeholder"),
+        placeholder="Paste Apache logs, PHP code, Flask code, or another snippet here...",
     )
 
 run_col, clear_col = st.columns([2, 1])
 with run_col:
-    run_clicked = st.button("🚀 Run ThreatLens Analysis", type="primary", use_container_width=True)
+    run_clicked = st.button("Run ThreatLens Analysis", type="primary", use_container_width=True)
 with clear_col:
-    st.button(t("clear"), use_container_width=True, on_click=clear_analysis_input)
+    st.button("Clear", use_container_width=True, on_click=clear_analysis_input)
 
 if run_clicked:
     try:
-        with st.spinner(t("analysis_running")):
+        with st.spinner("Running local rules and optional Gemini enrichment..."):
             st.session_state["result"] = run_threatlens_analysis(
                 st.session_state["input_text"],
                 st.session_state["input_type"],
                 st.session_state["input_name"] or "manual-input",
                 st.session_state["analysis_mode"],
-                st.session_state["language"],
                 st.session_state.get("api_key", ""),
             )
-        st.success(t("analysis_complete"))
+        st.success("Analysis complete.")
         st.rerun()
     except ValueError as exc:
         st.warning(str(exc))
     except Exception as exc:
-        st.error(t("analysis_failed", error=str(exc)))
+        st.error(f"Analysis failed: {exc}")
 
 
 if st.session_state.get("result"):
     render_results_tabs(st.session_state["result"], st.session_state.get("api_key", ""))
 else:
-    st.info(t("empty_state"))
+    st.info("Load demo data or paste/upload input, then run ThreatLens Analysis.")
