@@ -73,106 +73,299 @@ st.markdown(
     """
 <style>
   :root {
-    --tl-bg: #07111f;
-    --tl-panel: #0d1829;
-    --tl-panel-soft: #111d31;
-    --tl-border: #223247;
-    --tl-text: #e6edf7;
-    --tl-muted: #9aa8bd;
-    --tl-cyan: #25d7f2;
-    --tl-green: #27d98d;
-    --tl-amber: #f6b73c;
-    --tl-orange: #ff7a45;
-    --tl-red: #ff4d5f;
+    --tl-bg: #08111f;
+    --tl-panel: #0c1728;
+    --tl-panel-2: #0f1b2d;
+    --tl-panel-3: #101d31;
+    --tl-border: #213148;
+    --tl-border-soft: #17253a;
+    --tl-text: #edf5ff;
+    --tl-muted: #94a3b8;
+    --tl-soft: #cbd5e1;
+    --tl-cyan: #22d3ee;
+    --tl-blue: #3b82f6;
+    --tl-green: #22c55e;
+    --tl-amber: #f59e0b;
+    --tl-red: #fb7185;
+    --tl-purple: #a855f7;
+    --tl-shadow: 0 18px 45px rgba(0, 0, 0, .28);
   }
-  .block-container { padding-top: 1.4rem; max-width: 1280px; }
-  .tl-hero {
+
+  html, body, [data-testid="stAppViewContainer"], [data-testid="stApp"] {
+    background: var(--tl-bg) !important;
+    color: var(--tl-text);
+    font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  }
+
+  [data-testid="stHeader"], [data-testid="stToolbar"], footer { display: none !important; }
+  .block-container {
+    max-width: 1480px;
+    padding: 30px 30px 48px 30px;
+  }
+
+  section[data-testid="stSidebar"] {
+    width: 304px !important;
+    background: #07101d !important;
+    border-right: 1px solid var(--tl-border-soft);
+    box-shadow: 12px 0 40px rgba(0,0,0,.18);
+  }
+  section[data-testid="stSidebar"] > div { padding: 24px 20px; }
+  section[data-testid="stSidebar"] label,
+  section[data-testid="stSidebar"] .stMarkdown p { color: var(--tl-soft) !important; }
+
+  h1, h2, h3, p { letter-spacing: 0; }
+  h1, h2, h3 { color: var(--tl-text) !important; }
+
+  .tl-sidebar-logo {
+    display: flex;
+    align-items: center;
+    gap: 13px;
+    margin-bottom: 28px;
+    padding-bottom: 22px;
+    border-bottom: 1px solid var(--tl-border-soft);
+  }
+  .tl-logo-mark {
+    width: 46px;
+    height: 46px;
+    border-radius: 14px;
+    border: 1px solid rgba(34, 211, 238, .5);
+    background: #0b2033;
+    display: grid;
+    place-items: center;
+    color: var(--tl-cyan);
+    font-weight: 900;
+    font-size: 1.35rem;
+  }
+  .tl-logo-title { font-size: 1.12rem; font-weight: 850; color: var(--tl-text); line-height: 1.1; }
+  .tl-logo-subtitle { color: var(--tl-cyan); font-size: .78rem; font-weight: 700; margin-top: 4px; }
+
+  .tl-sidebar-section {
     border: 1px solid var(--tl-border);
-    background: linear-gradient(135deg, rgba(37,215,242,.12), rgba(39,217,141,.06));
-    border-radius: 8px;
-    padding: 22px 24px;
-    margin-bottom: 18px;
+    background: var(--tl-panel);
+    border-radius: 16px;
+    padding: 16px;
+    margin-bottom: 16px;
+    box-shadow: var(--tl-shadow);
+  }
+  .tl-sidebar-heading {
+    color: var(--tl-text);
+    font-weight: 800;
+    font-size: .95rem;
+    margin-bottom: 12px;
+  }
+  .tl-status-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    min-height: 36px;
+    border-radius: 12px;
+    font-weight: 800;
+    font-size: .82rem;
+    margin-top: 10px;
+    border: 1px solid transparent;
+  }
+  .tl-status-ok { color: #86efac; background: rgba(34, 197, 94, .12); border-color: rgba(34, 197, 94, .25); }
+  .tl-status-missing { color: #fbbf24; background: rgba(245, 158, 11, .12); border-color: rgba(245, 158, 11, .25); }
+
+  .tl-hero {
+    margin-bottom: 24px;
   }
   .tl-title {
     color: var(--tl-text);
-    font-size: 2.2rem;
-    line-height: 1.1;
-    font-weight: 800;
-    margin: 0 0 6px 0;
+    font-size: clamp(2rem, 3vw, 3.1rem);
+    line-height: 1.04;
+    font-weight: 900;
+    margin: 0 0 10px 0;
   }
   .tl-subtitle {
     color: var(--tl-cyan);
-    font-size: 1.05rem;
-    font-weight: 650;
-    margin-bottom: 8px;
+    font-size: 1.15rem;
+    font-weight: 800;
+    margin-bottom: 10px;
   }
-  .tl-muted { color: var(--tl-muted); }
-  .tl-card {
+  .tl-muted { color: var(--tl-muted); font-size: .95rem; line-height: 1.6; }
+
+  .tl-card, .tl-panel, .tl-demo-card, .tl-privacy-card, .tl-detected-card, .tl-finding {
     border: 1px solid var(--tl-border);
     background: var(--tl-panel);
-    border-radius: 8px;
-    padding: 16px;
-    min-height: 108px;
+    border-radius: 16px;
+    box-shadow: var(--tl-shadow);
+  }
+  .tl-card {
+    min-height: 142px;
+    padding: 18px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
   }
   .tl-card-label {
     color: var(--tl-muted);
     text-transform: uppercase;
     font-size: .72rem;
+    font-weight: 800;
     letter-spacing: .08em;
-    margin-bottom: 7px;
+    margin-bottom: 9px;
   }
   .tl-card-value {
     color: var(--tl-text);
-    font-size: 1.55rem;
-    font-weight: 800;
+    font-size: clamp(1.35rem, 2vw, 1.85rem);
+    font-weight: 900;
+    line-height: 1.1;
   }
   .tl-card-note {
     color: var(--tl-muted);
-    font-size: .82rem;
-    margin-top: 4px;
+    font-size: .84rem;
+    margin-top: 8px;
+    min-height: 20px;
   }
+
+  .tl-section-title { font-size: 1.45rem; font-weight: 900; color: var(--tl-text); margin: 0; }
+  .tl-section-note { color: var(--tl-muted); margin: 7px 0 20px 0; font-size: .94rem; }
+  .tl-panel { padding: 24px; margin-top: 18px; }
+  .tl-panel-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; margin-bottom: 18px; }
+
+  .tl-upload-shell {
+    border: 1px dashed #2b425c;
+    background: #091525;
+    border-radius: 16px;
+    padding: 18px;
+    margin-bottom: 16px;
+  }
+  .tl-detected-card {
+    min-height: auto;
+    padding: 16px 18px;
+    margin: 0 0 18px 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+  }
+  .tl-detected-card .tl-card-label { margin: 0 0 6px 0; text-align: left; }
+  .tl-detected-value { color: var(--tl-text); font-size: 1.2rem; font-weight: 900; }
+  .tl-detected-note { color: var(--tl-muted); font-size: .84rem; }
+
+  .tl-demo-card {
+    padding: 18px;
+    min-height: 82px;
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+  .tl-demo-icon {
+    width: 44px;
+    height: 44px;
+    border-radius: 13px;
+    display: grid;
+    place-items: center;
+    background: #10243a;
+    color: var(--tl-cyan);
+    font-weight: 900;
+  }
+  .tl-demo-title { color: var(--tl-text); font-size: .98rem; font-weight: 850; }
+  .tl-demo-note { color: var(--tl-muted); font-size: .82rem; margin-top: 3px; }
+  .tl-privacy-card { padding: 16px; color: #7dd3fc; font-size: .9rem; line-height: 1.55; background: #0a1a2d; }
+
+  .tl-results-shell { margin-top: 26px; }
+  .tl-results-heading { font-size: 1.65rem; font-weight: 900; margin-bottom: 6px; color: var(--tl-text); }
+  .tl-results-subtitle { color: var(--tl-muted); margin-bottom: 18px; }
   .tl-finding {
-    border: 1px solid var(--tl-border);
     border-left-width: 5px;
-    background: var(--tl-panel-soft);
-    border-radius: 8px;
-    padding: 14px 16px;
-    margin: 12px 0;
+    background: var(--tl-panel-2);
+    padding: 16px 18px;
+    margin: 14px 0;
   }
   .tl-badge {
     border-radius: 999px;
-    padding: 4px 10px;
-    font-weight: 700;
-    font-size: .76rem;
+    padding: 5px 11px;
+    font-weight: 850;
+    font-size: .75rem;
     display: inline-block;
   }
   .tl-evidence {
     background: #07101c;
     border: 1px solid var(--tl-border);
-    border-radius: 6px;
-    padding: 10px;
+    border-radius: 14px;
+    padding: 14px;
     color: #b7f6ff;
     white-space: pre-wrap;
     overflow-wrap: anywhere;
     font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
-    font-size: .84rem;
+    font-size: .86rem;
   }
-  section[data-testid="stSidebar"] {
-    border-right: 1px solid var(--tl-border);
+
+  div[data-testid="column"] { min-width: 0; }
+  .stTextInput input, .stTextArea textarea, .stSelectbox [data-baseweb="select"] > div {
+    background: #081525 !important;
+    border: 1px solid var(--tl-border) !important;
+    border-radius: 13px !important;
+    color: var(--tl-text) !important;
+    box-shadow: none !important;
   }
+  .stTextArea textarea {
+    min-height: 260px !important;
+    font-family: ui-monospace, SFMono-Regular, Consolas, monospace !important;
+    font-size: .95rem !important;
+  }
+  .stFileUploader section {
+    background: transparent !important;
+    border: 0 !important;
+    padding: 0 !important;
+  }
+  .stFileUploader [data-testid="stFileUploaderDropzone"] {
+    background: #081525 !important;
+    border: 1px dashed #2b425c !important;
+    border-radius: 16px !important;
+    padding: 22px !important;
+  }
+  .stFileUploader button, .stButton > button, .stDownloadButton > button {
+    border-radius: 13px !important;
+    min-height: 46px;
+    font-weight: 850 !important;
+    border: 1px solid var(--tl-border) !important;
+    background: #0b1728 !important;
+    color: var(--tl-text) !important;
+    box-shadow: none !important;
+  }
+  .stButton > button[kind="primary"] {
+    border: 0 !important;
+    background: linear-gradient(135deg, var(--tl-cyan), #6366f1) !important;
+    color: #ffffff !important;
+  }
+  .stButton > button:hover, .stDownloadButton > button:hover, .stFileUploader button:hover {
+    border-color: rgba(34, 211, 238, .6) !important;
+    color: #ffffff !important;
+    transform: translateY(-1px);
+  }
+
   div[data-testid="stMetric"] {
     border: 1px solid var(--tl-border);
-    border-radius: 8px;
-    padding: 12px;
+    border-radius: 16px;
+    padding: 16px;
+    background: var(--tl-panel);
   }
-  .stButton > button, .stDownloadButton > button {
-    border-radius: 6px;
-    min-height: 42px;
-    font-weight: 700;
+  .stTabs [data-baseweb="tab-list"] {
+    gap: 10px;
+    border-bottom: 1px solid var(--tl-border-soft);
+    margin-bottom: 18px;
   }
-  @media (max-width: 780px) {
-    .tl-title { font-size: 1.65rem; }
-    .tl-card { min-height: auto; }
+  .stTabs [data-baseweb="tab"] {
+    border-radius: 12px 12px 0 0;
+    color: var(--tl-muted);
+    font-weight: 800;
+  }
+  .stTabs [aria-selected="true"] {
+    color: var(--tl-cyan) !important;
+    background: rgba(34, 211, 238, .08) !important;
+  }
+
+  @media (max-width: 980px) {
+    .block-container { padding: 22px 16px 36px 16px; }
+    .tl-card { min-height: 118px; }
+    .tl-panel { padding: 18px; }
   }
 </style>
 """,
@@ -434,22 +627,47 @@ def render_metric_card(label: str, value: str, note: str = "") -> None:
     )
 
 
-def render_detected_input_card(result: dict[str, Any]) -> None:
-    detected = result.get("detected_input") or {}
+def get_detected_input_display(content: str, result: dict[str, Any] | None = None) -> dict[str, Any]:
+    if result and result.get("detected_input"):
+        return dict(result["detected_input"])
+    if (content or "").strip():
+        return detect_input(content).as_dict()
+    return detect_input("").as_dict()
+
+
+def render_detected_input_card(detected: dict[str, Any], compact: bool = False) -> None:
     label = str(detected.get("label") or "Generic Source Code")
     icon = str(detected.get("icon") or "\U0001f4c4")
-    confidence = float(detected.get("confidence") or 0)
-    note = "Low confidence fallback" if label == "Generic Source Code" and confidence == 0 else f"Heuristic confidence: {int(confidence * 100)}%"
+    note = "Automatically classified" if label != "Generic Source Code" else "Low-confidence inputs use the generic code analyzer"
+    extra_style = "margin-bottom:0" if compact else ""
     st.markdown(
         f"""
-<div class="tl-card" style="min-height:auto;margin-bottom:14px">
-  <div class="tl-card-label">Detected Input</div>
-  <div class="tl-card-value">{html.escape(icon)} {html.escape(label)}</div>
-  <div class="tl-card-note">{html.escape(note)}</div>
+<div class="tl-detected-card" style="{extra_style}">
+  <div>
+    <div class="tl-card-label">Detected Input</div>
+    <div class="tl-detected-value">{html.escape(icon)} {html.escape(label)}</div>
+  </div>
+  <div class="tl-detected-note">{html.escape(note)}</div>
 </div>
 """,
         unsafe_allow_html=True,
     )
+
+
+def render_panel_open(title: str, note: str = "") -> None:
+    note_html = f'<div class="tl-section-note">{html.escape(note)}</div>' if note else ""
+    st.markdown(
+        f"""
+<div class="tl-panel">
+  <div class="tl-section-title">{html.escape(title)}</div>
+  {note_html}
+""",
+        unsafe_allow_html=True,
+    )
+
+
+def render_panel_close() -> None:
+    st.markdown("</div>", unsafe_allow_html=True)
 
 
 def render_finding(finding: dict[str, Any], index: int) -> None:
@@ -505,16 +723,25 @@ def render_results_tabs(result: dict[str, Any], api_key: str) -> None:
     top_recommendations = result.get("top_recommendations", [])
     breakdown = get_score_breakdown(findings, rule_findings)
 
-    render_detected_input_card(result)
+    st.markdown(
+        """
+<div class="tl-results-shell">
+  <div class="tl-results-heading">Analysis Results</div>
+  <div class="tl-results-subtitle">Review the security assessment, mapped findings, history, and exports.</div>
+</div>
+""",
+        unsafe_allow_html=True,
+    )
+    render_detected_input_card(result.get("detected_input") or {})
 
-    tab_overview, tab_findings, tab_ai, tab_mapping, tab_report, tab_history = st.tabs(
+    tab_overview, tab_findings, tab_summary, tab_mapping, tab_history, tab_export = st.tabs(
         [
             "Overview",
             "Findings",
-            "Gemini AI Explanation",
-            "OWASP / MITRE Mapping",
-            "Report",
+            "Executive Summary",
+            "OWASP / MITRE",
             "History",
+            "Export",
         ]
     )
 
@@ -554,7 +781,7 @@ def render_results_tabs(result: dict[str, Any], api_key: str) -> None:
             for index, finding in enumerate(findings, 1):
                 render_finding(finding, index)
 
-    with tab_ai:
+    with tab_summary:
         status, level = status_text(api_key, result)
         getattr(st, level)(status)
         st.markdown("### Executive Summary")
@@ -604,7 +831,7 @@ def render_results_tabs(result: dict[str, Any], api_key: str) -> None:
             st.markdown("### Attack Timeline")
             st.dataframe(pd.DataFrame(result["attack_timeline"]), use_container_width=True, hide_index=True)
 
-    with tab_report:
+    with tab_export:
         text_report = build_text_report(
             result.get("analysis_type", ""),
             result.get("input_name", ""),
@@ -696,35 +923,47 @@ def _safe_json(value: Any, default: Any) -> Any:
 init_state()
 
 with st.sidebar:
-    st.markdown("## ThreatLens AI")
+    st.markdown(
+        """
+<div class="tl-sidebar-logo">
+  <div class="tl-logo-mark">TL</div>
+  <div>
+    <div class="tl-logo-title">ThreatLens AI</div>
+    <div class="tl-logo-subtitle">Security Analyzer</div>
+  </div>
+</div>
+""",
+        unsafe_allow_html=True,
+    )
 
-    st.markdown("### Gemini API")
+    st.markdown('<div class="tl-sidebar-section"><div class="tl-sidebar-heading">Gemini API</div>', unsafe_allow_html=True)
     st.session_state["api_key"] = st.text_input(
-        "Gemini API Key",
+        "API key",
         value=st.session_state.get("api_key", ""),
         type="password",
         placeholder="AIza...",
-        help="Load from Streamlit secrets with GEMINI_API_KEY or paste a key for this session. The key is never stored by the app.",
+        help="Paste a Gemini API key for this session.",
     )
-    status, level = status_text(st.session_state["api_key"], st.session_state.get("result"))
-    getattr(st, level)(status)
+    status_label = "Connected" if st.session_state.get("api_key", "").strip() else "Missing"
+    status_class = "tl-status-ok" if status_label == "Connected" else "tl-status-missing"
+    st.markdown(f'<div class="tl-status-badge {status_class}">{status_label}</div></div>', unsafe_allow_html=True)
 
-    st.markdown("### Analysis")
+    st.markdown('<div class="tl-sidebar-section"><div class="tl-sidebar-heading">Analysis</div>', unsafe_allow_html=True)
     st.session_state["analysis_mode"] = st.selectbox(
         "Analysis Mode",
         ANALYSIS_MODES,
         index=ANALYSIS_MODES.index(st.session_state.get("analysis_mode", ANALYSIS_MODES[1])),
     )
     st.session_state["demo_mode"] = st.toggle("Demo Mode", value=st.session_state.get("demo_mode", True))
-    st.caption("Gemini enriches local findings; local scan still works without a key.")
+    st.markdown('</div>', unsafe_allow_html=True)
 
 
 st.markdown(
     """
 <div class="tl-hero">
   <div class="tl-title">ThreatLens AI</div>
-  <div class="tl-subtitle">Gemini-Powered Cybersecurity Risk Analyzer</div>
-  <div class="tl-muted">ThreatLens AI combines local regex/rule-based detection with optional Gemini explanations, summaries, remediation advice, and OWASP/MITRE context for defensive security review.</div>
+  <div class="tl-subtitle">AI-Powered Cybersecurity Risk Analyzer</div>
+  <div class="tl-muted">Analyze logs and source code with local threat detection, optional Gemini explanations, risk scoring, and export-ready security reports.</div>
 </div>
 """,
     unsafe_allow_html=True,
@@ -738,57 +977,91 @@ high_findings = (
     if result
     else 0
 )
+detected_display = get_detected_input_display(st.session_state.get("input_text", ""), result)
 
-card1, card2, card3, card4, card5 = st.columns(5)
+card1, card2, card3, card4, card5 = st.columns(5, gap="medium")
 with card1:
     render_metric_card("Overall Risk Score", f"{result.get('risk_score', 0) if result else 0}/100", result.get("severity", "Clean") if result else "Clean")
 with card2:
-    render_metric_card("Total Findings", str(total_findings), "Local + optional Gemini")
+    render_metric_card("Total Findings", str(total_findings), "Detected issues")
 with card3:
-    render_metric_card("High/Critical", str(high_findings), "Needs fast review")
+    render_metric_card("High/Critical Findings", str(high_findings), "Priority review")
 with card4:
-    render_metric_card("Gemini Status", status.split(":")[0], "Optional enrichment")
+    render_metric_card("Gemini Status", status.split(":")[0], "AI enrichment")
 with card5:
-    render_metric_card("Analysis Mode", st.session_state["analysis_mode"], "Auto-detect input")
+    render_metric_card("Analysis Mode", st.session_state["analysis_mode"], "Auto input detection")
 
-
-st.markdown("## Threat Detection")
-top_left, top_right = st.columns([2, 1])
-with top_right:
-    st.markdown("### Demo Mode")
-    for sample_key, (label, _, _) in DEMO_SAMPLES.items():
-        if st.button(label, use_container_width=True):
-            demo_text, demo_name = read_sample(sample_key)
-            st.session_state["input_text"] = demo_text
-            st.session_state["input_name"] = demo_name
-            st.rerun()
-    st.caption("Loads intentionally vulnerable sample logs or code so the app can be demonstrated without uploading a file.")
-
-with top_left:
-    uploaded_file = st.file_uploader("Upload log/code file (optional)", type=["txt", "log", "py", "php", "js", "json", "conf"])
+left, right = st.columns([1.62, 1], gap="large")
+with left:
+    render_panel_open(
+        "Threat Detection",
+        "Upload a file or paste logs/source code. ThreatLens AI will automatically detect the input type before analysis.",
+    )
+    st.markdown('<div class="tl-upload-shell">', unsafe_allow_html=True)
+    uploaded_file = st.file_uploader("Upload log/code file", type=["txt", "log", "py", "php", "js", "json", "conf"])
+    st.markdown('</div>', unsafe_allow_html=True)
     if uploaded_file and uploaded_file.name != st.session_state.get("last_upload_name"):
         st.session_state["input_text"] = decode_upload(uploaded_file)
         st.session_state["input_name"] = uploaded_file.name
         st.session_state["last_upload_name"] = uploaded_file.name
         st.rerun()
 
-    st.text_input("Input name", key="input_name")
+    st.text_input("Input Name", key="input_name", placeholder="server-log.txt, app.py")
     st.text_area(
-        "Log or code input",
+        "Code Editor",
         key="input_text",
-        height=260,
+        height=300,
         placeholder="Paste logs or source code here... ThreatLens AI will automatically detect the input type.",
     )
+    if st.session_state.get("input_text", "").strip():
+        render_detected_input_card(detected_display, compact=True)
 
-run_col, clear_col = st.columns([2, 1])
-with run_col:
-    run_clicked = st.button("Run ThreatLens Analysis", type="primary", use_container_width=True)
-with clear_col:
-    st.button("Clear", use_container_width=True, on_click=clear_analysis_input)
+    run_col, clear_col = st.columns([2, 1], gap="medium")
+    with run_col:
+        run_clicked = st.button("Run ThreatLens Analysis", type="primary", use_container_width=True)
+    with clear_col:
+        st.button("Clear", use_container_width=True, on_click=clear_analysis_input)
+    render_panel_close()
 
-if run_clicked:
+with right:
+    render_panel_open("Demo Data", "Load a sample to test the analyzer.")
+    demo_meta = {
+        "apache": ("Apache Demo", "Realistic web server logs", "LOG"),
+        "php": ("PHP Demo", "Vulnerable PHP source sample", "PHP"),
+        "flask": ("Flask Demo", "Vulnerable Python / Flask code", "PY"),
+    }
+    for sample_key, (title, note, badge) in demo_meta.items():
+        st.markdown(
+            f"""
+<div class="tl-demo-card">
+  <div class="tl-demo-icon">{html.escape(badge)}</div>
+  <div>
+    <div class="tl-demo-title">{html.escape(title)}</div>
+    <div class="tl-demo-note">{html.escape(note)}</div>
+  </div>
+</div>
+""",
+            unsafe_allow_html=True,
+        )
+        if st.button(f"Load {title}", key=f"demo_{sample_key}", use_container_width=True):
+            demo_text, demo_name = read_sample(sample_key)
+            st.session_state["input_text"] = demo_text
+            st.session_state["input_name"] = demo_name
+            st.rerun()
+    st.markdown(
+        """
+<div class="tl-privacy-card">
+  <strong>Private by default.</strong><br>
+  Processing starts only when you run an analysis. Gemini is used only when you provide a key and choose an AI-enabled mode.
+</div>
+""",
+        unsafe_allow_html=True,
+    )
+    render_panel_close()
+
+if 'run_clicked' in locals() and run_clicked:
     try:
-        with st.spinner("Running local rules and optional Gemini enrichment..."):
+        with st.spinner("Running threat analysis..."):
             st.session_state["result"] = run_threatlens_analysis(
                 st.session_state["input_text"],
                 st.session_state["input_name"] or "manual-input",
@@ -802,8 +1075,5 @@ if run_clicked:
     except Exception as exc:
         st.error(f"Analysis failed: {exc}")
 
-
 if st.session_state.get("result"):
     render_results_tabs(st.session_state["result"], st.session_state.get("api_key", ""))
-else:
-    st.info("Load demo data or paste/upload input, then run ThreatLens Analysis.")
