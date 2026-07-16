@@ -63,7 +63,7 @@ DEMO_SAMPLES = {
 
 st.set_page_config(
     page_title=APP_NAME,
-    page_icon="\U0001f6e1",
+    page_icon="🛡️",
     layout="wide",
     initial_sidebar_state="expanded",
 )
@@ -374,54 +374,6 @@ st.markdown(
 
 
 
-st.markdown(
-    """
-<style>
-  :root { --tl-bg:#070b12; --tl-panel:#0b111b; --tl-panel-2:#0d1521; --tl-border:#1c2735; --tl-border-soft:#141d29; --tl-text:#f1f5f9; --tl-muted:#8c9aaa; --tl-cyan:#22c7f0; --tl-green:#22c55e; --tl-amber:#eab308; --tl-red:#ef4444; --tl-shadow:none; }
-  .block-container { max-width:1360px; padding:32px 40px 56px; }
-  section[data-testid="stSidebar"] { width:272px !important; background:#080d15 !important; box-shadow:none; }
-  section[data-testid="stSidebar"] > div { padding:24px; }
-  .tl-sidebar-logo { gap:12px; margin-bottom:32px; padding:0; border:0; }
-  .tl-logo-mark { width:36px; height:36px; border-radius:10px; border-color:#244053; background:#0b1822; font-size:.88rem; }
-  .tl-logo-title { font-size:1rem; font-weight:700; }
-  .tl-logo-subtitle { display:none; }
-  .tl-sidebar-section { border:0; background:transparent; border-radius:0; padding:0; margin-bottom:32px; box-shadow:none; }
-  .tl-sidebar-heading { font-size:.9rem; font-weight:650; margin-bottom:16px; }
-  .tl-status-badge { min-height:28px; border-radius:10px; font-size:.78rem; font-weight:650; margin-top:8px; }
-  .tl-hero { margin-bottom:32px; }
-  .tl-title { font-size:1.75rem; line-height:1.2; font-weight:700; margin:0 0 8px; }
-  .tl-subtitle { color:var(--tl-muted); font-size:.95rem; font-weight:400; margin:0; }
-  .tl-muted { font-size:.9rem; line-height:1.55; }
-  .tl-card, .tl-detected-card, .tl-finding { border-radius:11px; box-shadow:none; }
-  .tl-card { min-height:88px; padding:16px; align-items:flex-start; text-align:left; }
-  .tl-card-label { text-transform:none; font-size:.78rem; font-weight:500; letter-spacing:0; margin-bottom:8px; }
-  .tl-card-value { font-size:1.25rem; font-weight:650; line-height:1.2; }
-  .tl-card-note { display:none; }
-  div[data-testid="stVerticalBlockBorderWrapper"] { border-color:var(--tl-border) !important; border-radius:11px !important; background:var(--tl-panel) !important; box-shadow:none !important; }
-  .tl-section-title { font-size:1.05rem; font-weight:650; }
-  .tl-section-note { margin:4px 0 20px; font-size:.88rem; }
-  .tl-demo-heading { color:var(--tl-text); font-size:.9rem; font-weight:650; margin-bottom:4px; }
-  .tl-demo-note { color:var(--tl-muted); font-size:.82rem; margin-bottom:12px; }
-  .stTextInput input, .stTextArea textarea, .stSelectbox [data-baseweb="select"] > div { background:#080e17 !important; border-radius:10px !important; }
-  .stTextArea textarea { min-height:340px !important; }
-  .stFileUploader [data-testid="stFileUploaderDropzone"] { background:#080e17 !important; border-color:#2a3a4d !important; border-radius:10px !important; padding:28px !important; }
-  .stFileUploader button, .stButton > button, .stDownloadButton > button { border-radius:10px !important; min-height:40px; font-weight:600 !important; }
-  .stButton > button[kind="primary"] { border:1px solid var(--tl-cyan) !important; background:var(--tl-cyan) !important; color:#031016 !important; }
-  .stButton > button:hover, .stDownloadButton > button:hover, .stFileUploader button:hover { transform:none; }
-  .tl-detected-card { padding:14px 16px; margin-bottom:16px; }
-  .tl-detected-value { font-size:1rem; font-weight:650; }
-  .tl-detected-note { font-size:.8rem; }
-  .tl-results-shell { margin-top:40px; padding-top:32px; border-top:1px solid var(--tl-border-soft); }
-  .tl-results-heading { font-size:1.05rem; font-weight:650; }
-  .tl-finding, .tl-evidence, div[data-testid="stMetric"] { border-radius:10px; }
-  .stTabs [data-baseweb="tab-list"] { gap:4px; }
-  .stTabs [data-baseweb="tab"] { border-radius:8px 8px 0 0; }
-  @media (max-width:980px) { .block-container { padding:24px 16px 40px; } .tl-card { min-height:80px; } }
-</style>
-""",
-    unsafe_allow_html=True,
-)
-
 def get_secret_api_key() -> str:
     try:
         return st.secrets.get("GEMINI_API_KEY", "").strip()
@@ -662,12 +614,13 @@ def build_json_export(result: dict[str, Any]) -> str:
     return json.dumps(payload, indent=2, ensure_ascii=False)
 
 
-def render_metric_card(label: str, value: str) -> None:
+def render_metric_card(label: str, value: str, note: str = "") -> None:
     st.markdown(
         f"""
 <div class="tl-card">
   <div class="tl-card-label">{html.escape(label)}</div>
   <div class="tl-card-value">{html.escape(value)}</div>
+  <div class="tl-card-note">{html.escape(note)}</div>
 </div>
 """,
         unsafe_allow_html=True,
@@ -681,6 +634,40 @@ def get_detected_input_display(content: str, result: dict[str, Any] | None = Non
         return detect_input(content).as_dict()
     return detect_input("").as_dict()
 
+
+def render_detected_input_card(detected: dict[str, Any], compact: bool = False) -> None:
+    label = str(detected.get("label") or "Generic Source Code")
+    icon = str(detected.get("icon") or "\U0001f4c4")
+    note = "Automatically classified" if label != "Generic Source Code" else "Low-confidence inputs use the generic code analyzer"
+    extra_style = "margin-bottom:0" if compact else ""
+    st.markdown(
+        f"""
+<div class="tl-detected-card" style="{extra_style}">
+  <div>
+    <div class="tl-card-label">Detected Input</div>
+    <div class="tl-detected-value">{html.escape(icon)} {html.escape(label)}</div>
+  </div>
+  <div class="tl-detected-note">{html.escape(note)}</div>
+</div>
+""",
+        unsafe_allow_html=True,
+    )
+
+
+def render_panel_open(title: str, note: str = "") -> None:
+    note_html = f'<div class="tl-section-note">{html.escape(note)}</div>' if note else ""
+    st.markdown(
+        f"""
+<div class="tl-panel">
+  <div class="tl-section-title">{html.escape(title)}</div>
+  {note_html}
+""",
+        unsafe_allow_html=True,
+    )
+
+
+def render_panel_close() -> None:
+    st.markdown("</div>", unsafe_allow_html=True)
 
 
 def render_finding(finding: dict[str, Any], index: int) -> None:
@@ -745,15 +732,16 @@ def render_results_tabs(result: dict[str, Any], api_key: str) -> None:
 """,
         unsafe_allow_html=True,
     )
+    render_detected_input_card(result.get("detected_input") or {})
 
-    tab_overview, tab_findings, tab_summary, tab_mapping, tab_export, tab_history = st.tabs(
+    tab_overview, tab_findings, tab_summary, tab_mapping, tab_history, tab_export = st.tabs(
         [
             "Overview",
             "Findings",
-            "AI Explanation",
+            "Executive Summary",
             "OWASP / MITRE",
-            "Report",
             "History",
+            "Export",
         ]
     )
 
@@ -763,7 +751,7 @@ def render_results_tabs(result: dict[str, Any], api_key: str) -> None:
             st.markdown("### Risk Score")
             st.progress(min(risk_score, 100) / 100)
             st.markdown(
-                f"<div style='font-size:1.75rem;font-weight:700;color:{get_severity_color(severity)}'>{risk_score}/100</div>",
+                f"<div style='font-size:3rem;font-weight:900;color:{get_severity_color(severity)}'>{risk_score}/100</div>",
                 unsafe_allow_html=True,
             )
             st.markdown(f"**{severity}**")
@@ -974,86 +962,102 @@ st.markdown(
     """
 <div class="tl-hero">
   <div class="tl-title">ThreatLens AI</div>
-  <div class="tl-subtitle">Analyze logs and source code for security vulnerabilities.</div>
+  <div class="tl-subtitle">AI-Powered Cybersecurity Risk Analyzer</div>
+  <div class="tl-muted">Analyze logs and source code with local threat detection, optional Gemini explanations, risk scoring, and export-ready security reports.</div>
 </div>
 """,
     unsafe_allow_html=True,
 )
 
 result = st.session_state.get("result")
+status, _ = status_text(st.session_state.get("api_key", ""), result)
 total_findings = len(result.get("findings", [])) if result else 0
 high_findings = (
-    sum(1 for item in result.get("findings", []) if item.get("severity") == "Critical")
+    sum(1 for item in result.get("findings", []) if item.get("severity") in {"Critical", "High"})
     if result
     else 0
 )
 detected_display = get_detected_input_display(st.session_state.get("input_text", ""), result)
 
-card1, card2, card3, card4 = st.columns(4, gap="medium")
+card1, card2, card3, card4, card5 = st.columns(5, gap="medium")
 with card1:
-    render_metric_card("Overall Risk", f"{result.get('risk_score', 0) if result else 0}/100")
+    render_metric_card("Overall Risk Score", f"{result.get('risk_score', 0) if result else 0}/100", result.get("severity", "Clean") if result else "Clean")
 with card2:
-    render_metric_card("Findings", str(total_findings))
+    render_metric_card("Total Findings", str(total_findings), "Detected issues")
 with card3:
-    render_metric_card("Critical", str(high_findings))
+    render_metric_card("High/Critical Findings", str(high_findings), "Priority review")
 with card4:
-    render_metric_card("Input Type", f"{detected_display.get('icon', '')} {detected_display.get('label', 'Generic Source Code')}")
+    render_metric_card("Gemini Status", status.split(":")[0], "AI enrichment")
+with card5:
+    render_metric_card("Analysis Mode", st.session_state["analysis_mode"], "Auto input detection")
 
-workspace_left, workspace_right = st.columns([3, 1], gap="large")
-with workspace_left:
-    with st.container(border=True):
+left, right = st.columns([1.62, 1], gap="large")
+with left:
+    render_panel_open(
+        "Threat Detection",
+        "Upload a file or paste logs/source code. ThreatLens AI will automatically detect the input type before analysis.",
+    )
+    st.markdown('<div class="tl-upload-shell">', unsafe_allow_html=True)
+    uploaded_file = st.file_uploader("Upload log/code file", type=["txt", "log", "py", "php", "js", "json", "conf"])
+    st.markdown('</div>', unsafe_allow_html=True)
+    if uploaded_file and uploaded_file.name != st.session_state.get("last_upload_name"):
+        st.session_state["input_text"] = decode_upload(uploaded_file)
+        st.session_state["input_name"] = uploaded_file.name
+        st.session_state["last_upload_name"] = uploaded_file.name
+        st.rerun()
+
+    st.text_input("Input Name", key="input_name", placeholder="server-log.txt, app.py")
+    st.text_area(
+        "Code Editor",
+        key="input_text",
+        height=300,
+        placeholder="Paste logs or source code here... ThreatLens AI will automatically detect the input type.",
+    )
+    if st.session_state.get("input_text", "").strip():
+        render_detected_input_card(detected_display, compact=True)
+
+    run_col, clear_col = st.columns([2, 1], gap="medium")
+    with run_col:
+        run_clicked = st.button("Run ThreatLens Analysis", type="primary", use_container_width=True)
+    with clear_col:
+        st.button("Clear", use_container_width=True, on_click=clear_analysis_input)
+    render_panel_close()
+
+with right:
+    render_panel_open("Demo Data", "Load a sample to test the analyzer.")
+    demo_meta = {
+        "apache": ("Apache Demo", "Realistic web server logs", "LOG"),
+        "php": ("PHP Demo", "Vulnerable PHP source sample", "PHP"),
+        "flask": ("Flask Demo", "Vulnerable Python / Flask code", "PY"),
+    }
+    for sample_key, (title, note, badge) in demo_meta.items():
         st.markdown(
-            """
-<div class="tl-section-title">Threat Detection</div>
-<div class="tl-section-note">Upload a file or paste content. Input type is detected automatically.</div>
+            f"""
+<div class="tl-demo-card">
+  <div class="tl-demo-icon">{html.escape(badge)}</div>
+  <div>
+    <div class="tl-demo-title">{html.escape(title)}</div>
+    <div class="tl-demo-note">{html.escape(note)}</div>
+  </div>
+</div>
 """,
             unsafe_allow_html=True,
         )
-        uploaded_file = st.file_uploader(
-            "Upload file",
-            type=["txt", "log", "py", "php", "js", "json", "conf"],
-        )
-        if uploaded_file and uploaded_file.name != st.session_state.get("last_upload_name"):
-            st.session_state["input_text"] = decode_upload(uploaded_file)
-            st.session_state["input_name"] = uploaded_file.name
-            st.session_state["last_upload_name"] = uploaded_file.name
+        if st.button(f"Load {title}", key=f"demo_{sample_key}", use_container_width=True):
+            demo_text, demo_name = read_sample(sample_key)
+            st.session_state["input_text"] = demo_text
+            st.session_state["input_name"] = demo_name
             st.rerun()
-
-        st.text_input("Input Name", key="input_name", placeholder="server-log.txt, app.py")
-        st.text_area(
-            "Code Editor",
-            key="input_text",
-            height=360,
-            placeholder="Paste logs or source code here... ThreatLens AI will automatically detect the input type.",
-        )
-        run_col, clear_col = st.columns([3, 1], gap="small")
-        with run_col:
-            run_clicked = st.button("Analyze", type="primary", use_container_width=True)
-        with clear_col:
-            st.button("Clear", use_container_width=True, on_click=clear_analysis_input)
-
-with workspace_right:
-    with st.container(border=True):
-        st.markdown(
-            """
-<div class="tl-demo-heading">Demo Samples</div>
-<div class="tl-demo-note">Load a prepared security sample.</div>
+    st.markdown(
+        """
+<div class="tl-privacy-card">
+  <strong>Private by default.</strong><br>
+  Processing starts only when you run an analysis. Gemini is used only when you provide a key and choose an AI-enabled mode.
+</div>
 """,
-            unsafe_allow_html=True,
-        )
-        apache_demo, php_demo, python_demo = st.columns(3, gap="small")
-        demo_actions = (
-            (apache_demo, "apache", "Apache"),
-            (php_demo, "php", "PHP"),
-            (python_demo, "flask", "Python"),
-        )
-        for column, sample_key, label in demo_actions:
-            with column:
-                if st.button(label, key=f"demo_{sample_key}", use_container_width=True):
-                    demo_text, demo_name = read_sample(sample_key)
-                    st.session_state["input_text"] = demo_text
-                    st.session_state["input_name"] = demo_name
-                    st.rerun()
+        unsafe_allow_html=True,
+    )
+    render_panel_close()
 
 if 'run_clicked' in locals() and run_clicked:
     try:
