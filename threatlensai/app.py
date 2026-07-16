@@ -19,6 +19,7 @@ if str(APP_DIR) not in sys.path:
 try:
     from database import delete_analysis, get_all_analyses, get_analysis_detail, save_analysis, save_uploaded_file
     from gemini_client import GeminiAPIError, analyze_code, analyze_logs, generate_executive_summary
+    from input_detector import detect_input
     from log_parser import get_log_stats, parse_log_file
     from report_generator import build_text_report
     from risk_scoring import compute_risk_score, get_score_breakdown, get_severity_color
@@ -38,6 +39,7 @@ except ModuleNotFoundError:
         save_uploaded_file,
     )
     from threatlensai.gemini_client import GeminiAPIError, analyze_code, analyze_logs, generate_executive_summary
+    from threatlensai.input_detector import detect_input
     from threatlensai.log_parser import get_log_stats, parse_log_file
     from threatlensai.report_generator import build_text_report
     from threatlensai.risk_scoring import compute_risk_score, get_score_breakdown, get_severity_color
@@ -52,7 +54,11 @@ except ModuleNotFoundError:
 
 SAMPLE_DATA_DIR = Path(__file__).parent / "sample_data"
 ANALYSIS_MODES = ["Local Scan Only", "Local + Gemini Explanation", "Full Gemini Report"]
-INPUT_TYPES = ["Apache Log", "PHP Code", "Flask Code", "Custom Code"]
+DEMO_SAMPLES = {
+    "apache": ("Apache Log Demo", "demo_apache_attack.txt", "demo-apache-attack.txt"),
+    "php": ("PHP Demo", "vulnerable_login.php", "vulnerable_login.php"),
+    "flask": ("Flask Demo", "vulnerable_flask.py", "vulnerable_flask.py"),
+}
 
 
 st.set_page_config(
@@ -185,7 +191,6 @@ def get_secret_api_key() -> str:
 def init_state() -> None:
     defaults = {
         "analysis_mode": ANALYSIS_MODES[1],
-        "input_type": INPUT_TYPES[0],
         "demo_mode": True,
         "input_text": "",
         "input_name": "manual-input",
@@ -204,21 +209,16 @@ def clear_analysis_input() -> None:
     st.session_state["last_upload_name"] = ""
 
 
-def read_sample(sample_name: str) -> tuple[str, str]:
-    samples = {
-        "Apache Log": ("demo_apache_attack.txt", "demo-apache-attack.txt"),
-        "PHP Code": ("vulnerable_login.php", "vulnerable_login.php"),
-        "Flask Code": ("vulnerable_flask.py", "vulnerable_flask.py"),
-    }
-    filename, display_name = samples.get(sample_name, samples["Apache Log"])
+def read_sample(sample_key: str) -> tuple[str, str]:
+    _, filename, display_name = DEMO_SAMPLES.get(sample_key, DEMO_SAMPLES["apache"])
     path = SAMPLE_DATA_DIR / filename
     if path.exists():
         return path.read_text(encoding="utf-8", errors="replace"), display_name
-    return build_inline_demo(sample_name), f"demo-{sample_name.lower().replace(' ', '-')}.txt"
+    return build_inline_demo(sample_key), display_name
 
 
-def build_inline_demo(sample_name: str) -> str:
-    if sample_name == "PHP Code":
+def build_inline_demo(sample_key: str) -> str:
+    if sample_key == "php":
         return """<?php
 $username = $_POST['username'];
 $password = $_POST['password'];
@@ -226,7 +226,7 @@ $api_key = "AIzaSyDemoKeyForTrainingOnly1234567890";
 $sql = "SELECT * FROM users WHERE username='$username' AND password='$password'";
 echo $_GET['next'];
 ?>"""
-    if sample_name in {"Flask Code", "Custom Code"}:
+    if sample_key == "flask":
         return """from flask import Flask, request
 import os, hashlib
 
@@ -304,7 +304,6 @@ def local_summary(severity: str, score: int, findings: list[dict[str, Any]]) -> 
 
 def run_threatlens_analysis(
     content: str,
-    input_type: str,
     input_name: str,
     mode: str,
     api_key: str,
@@ -314,14 +313,15 @@ def run_threatlens_analysis(
     if not content:
         raise ValueError("Add input text, upload a file, or load demo data before running analysis.")
 
-    is_log = input_type == "Apache Log"
+    detected_input = detect_input(content)
+    is_log = detected_input.analysis_kind == "log"
     if is_log:
         parsed_df, log_format = parse_log_file(content)
-        code_language = ""
+        source_type = ""
     else:
         parsed_df = pd.DataFrame()
         log_format = "code"
-        code_language = "php" if input_type == "PHP Code" else "python"
+        source_type = detected_input.source_type
 
     rule_findings = run_rule_detection(parsed_df, content)
     pre_labels = summarize_rule_findings(rule_findings)
@@ -339,7 +339,7 @@ def run_threatlens_analysis(
             if is_log:
                 gemini_findings = analyze_logs(flagged_content, pre_labels, api_key)
             else:
-                gemini_findings = analyze_code(flagged_content, code_language, pre_labels, api_key)
+                gemini_findings = analyze_code(flagged_content, source_type, pre_labels, api_key)
             gemini_used = True
         except GeminiAPIError as exc:
             gemini_error = str(exc)
@@ -381,7 +381,7 @@ def run_threatlens_analysis(
         "analysis_id": analysis_id,
         "analysis_type": analysis_type,
         "analysis_mode": mode,
-        "input_type": input_type,
+        "detected_input": detected_input.as_dict(),
         "input_name": input_name,
         "log_format": log_format,
         "line_count": len(content.splitlines()),
@@ -427,6 +427,24 @@ def render_metric_card(label: str, value: str, note: str = "") -> None:
 <div class="tl-card">
   <div class="tl-card-label">{html.escape(label)}</div>
   <div class="tl-card-value">{html.escape(value)}</div>
+  <div class="tl-card-note">{html.escape(note)}</div>
+</div>
+""",
+        unsafe_allow_html=True,
+    )
+
+
+def render_detected_input_card(result: dict[str, Any]) -> None:
+    detected = result.get("detected_input") or {}
+    label = str(detected.get("label") or "Generic Source Code")
+    icon = str(detected.get("icon") or "\U0001f4c4")
+    confidence = float(detected.get("confidence") or 0)
+    note = "Low confidence fallback" if label == "Generic Source Code" and confidence == 0 else f"Heuristic confidence: {int(confidence * 100)}%"
+    st.markdown(
+        f"""
+<div class="tl-card" style="min-height:auto;margin-bottom:14px">
+  <div class="tl-card-label">Detected Input</div>
+  <div class="tl-card-value">{html.escape(icon)} {html.escape(label)}</div>
   <div class="tl-card-note">{html.escape(note)}</div>
 </div>
 """,
@@ -486,6 +504,8 @@ def render_results_tabs(result: dict[str, Any], api_key: str) -> None:
     summary = result.get("executive_summary", {})
     top_recommendations = result.get("top_recommendations", [])
     breakdown = get_score_breakdown(findings, rule_findings)
+
+    render_detected_input_card(result)
 
     tab_overview, tab_findings, tab_ai, tab_mapping, tab_report, tab_history = st.tabs(
         [
@@ -645,6 +665,7 @@ def render_history() -> None:
                         "analysis_type": item.get("analysis_type", ""),
                         "analysis_mode": "History",
                         "input_name": item.get("input_filename", ""),
+                        "detected_input": detect_input(str(item.get("input_preview", ""))).as_dict(),
                         "risk_score": item.get("overall_risk_score", 0),
                         "severity": item.get("severity_label", "Clean"),
                         "findings": detail.get("findings", []),
@@ -694,11 +715,6 @@ with st.sidebar:
         ANALYSIS_MODES,
         index=ANALYSIS_MODES.index(st.session_state.get("analysis_mode", ANALYSIS_MODES[1])),
     )
-    st.session_state["input_type"] = st.selectbox(
-        "Input Type",
-        INPUT_TYPES,
-        index=INPUT_TYPES.index(st.session_state.get("input_type", INPUT_TYPES[0])),
-    )
     st.session_state["demo_mode"] = st.toggle("Demo Mode", value=st.session_state.get("demo_mode", True))
     st.caption("Gemini enriches local findings; local scan still works without a key.")
 
@@ -733,18 +749,19 @@ with card3:
 with card4:
     render_metric_card("Gemini Status", status.split(":")[0], "Optional enrichment")
 with card5:
-    render_metric_card("Analysis Mode", st.session_state["analysis_mode"], st.session_state["input_type"])
+    render_metric_card("Analysis Mode", st.session_state["analysis_mode"], "Auto-detect input")
 
 
 st.markdown("## Threat Detection")
 top_left, top_right = st.columns([2, 1])
 with top_right:
     st.markdown("### Demo Mode")
-    if st.button("Load Demo Data", use_container_width=True):
-        demo_text, demo_name = read_sample(st.session_state["input_type"])
-        st.session_state["input_text"] = demo_text
-        st.session_state["input_name"] = demo_name
-        st.rerun()
+    for sample_key, (label, _, _) in DEMO_SAMPLES.items():
+        if st.button(label, use_container_width=True):
+            demo_text, demo_name = read_sample(sample_key)
+            st.session_state["input_text"] = demo_text
+            st.session_state["input_name"] = demo_name
+            st.rerun()
     st.caption("Loads intentionally vulnerable sample logs or code so the app can be demonstrated without uploading a file.")
 
 with top_left:
@@ -760,7 +777,7 @@ with top_left:
         "Log or code input",
         key="input_text",
         height=260,
-        placeholder="Paste Apache logs, PHP code, Flask code, or another snippet here...",
+        placeholder="Paste logs or source code here... ThreatLens AI will automatically detect the input type.",
     )
 
 run_col, clear_col = st.columns([2, 1])
@@ -774,7 +791,6 @@ if run_clicked:
         with st.spinner("Running local rules and optional Gemini enrichment..."):
             st.session_state["result"] = run_threatlens_analysis(
                 st.session_state["input_text"],
-                st.session_state["input_type"],
                 st.session_state["input_name"] or "manual-input",
                 st.session_state["analysis_mode"],
                 st.session_state.get("api_key", ""),
