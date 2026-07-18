@@ -626,6 +626,8 @@ def render_results_page(result: dict[str, Any], api_key: str) -> None:
             else:
                 st.success(t("no_recommendations"))
 
+        render_analysis_details(result)
+
     with tab_findings:
         if not findings:
             st.success(t("no_threats_detected"))
@@ -784,16 +786,20 @@ def render_sidebar() -> None:
         st.markdown("## ThreatLens AI")
         st.caption("Defensive analysis workspace")
 
-        if st.button("Home", use_container_width=True):
-            st.session_state["current_page"] = "Home"
-            st.rerun()
+        nav_home, nav_results, nav_history = st.columns(3)
+        with nav_home:
+            if st.button("Home", use_container_width=True):
+                st.session_state["current_page"] = "Home"
+                st.rerun()
         results_disabled = not bool(st.session_state.get("result"))
-        if st.button("Results", use_container_width=True, disabled=results_disabled):
-            st.session_state["current_page"] = "Results"
-            st.rerun()
-        if st.button("History", use_container_width=True):
-            st.session_state["current_page"] = "History"
-            st.rerun()
+        with nav_results:
+            if st.button("Results", use_container_width=True, disabled=results_disabled):
+                st.session_state["current_page"] = "Results"
+                st.rerun()
+        with nav_history:
+            if st.button("History", use_container_width=True):
+                st.session_state["current_page"] = "History"
+                st.rerun()
 
         st.divider()
         st.markdown("### Gemini API")
@@ -807,23 +813,6 @@ def render_sidebar() -> None:
         status, level = status_text(st.session_state["api_key"], st.session_state.get("result"))
         getattr(st, level)(status)
 
-        st.markdown("### Analysis")
-        st.session_state["analysis_mode"] = st.selectbox(
-            t("analysis_mode"),
-            ANALYSIS_MODES,
-            index=ANALYSIS_MODES.index(st.session_state.get("analysis_mode", ANALYSIS_MODES[1])),
-        )
-        st.session_state["input_type"] = st.selectbox(
-            t("input_type"),
-            INPUT_TYPES,
-            index=INPUT_TYPES.index(st.session_state.get("input_type", INPUT_TYPES[0])),
-        )
-        st.session_state["demo_mode"] = st.toggle("Demo Mode", value=st.session_state.get("demo_mode", True))
-        st.caption(t("sidebar_note"))
-
-        if st.session_state.get("current_page") == "Results" and st.session_state.get("result"):
-            st.divider()
-            render_analysis_details(st.session_state["result"])
 
 
 def render_home_page() -> None:
@@ -841,6 +830,22 @@ def render_home_page() -> None:
     st.markdown(f"## {t('threat_detection')}")
     top_left, top_right = st.columns([2, 1])
     with top_right:
+        st.markdown('<div class="tl-action-card">', unsafe_allow_html=True)
+        st.markdown("### Analysis")
+        st.session_state["analysis_mode"] = st.selectbox(
+            t("analysis_mode"),
+            ANALYSIS_MODES,
+            index=ANALYSIS_MODES.index(st.session_state.get("analysis_mode", ANALYSIS_MODES[1])),
+        )
+        st.session_state["input_type"] = st.selectbox(
+            t("input_type"),
+            INPUT_TYPES,
+            index=INPUT_TYPES.index(st.session_state.get("input_type", INPUT_TYPES[0])),
+        )
+        st.session_state["demo_mode"] = st.toggle("Demo Mode", value=st.session_state.get("demo_mode", True))
+        st.caption(t("sidebar_note"))
+        st.markdown('</div>', unsafe_allow_html=True)
+
         st.markdown('<div class="tl-action-card">', unsafe_allow_html=True)
         st.markdown(f"### {t('demo_mode')}")
         if st.button("Load Demo Data", use_container_width=True):
