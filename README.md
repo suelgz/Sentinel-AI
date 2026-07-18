@@ -15,6 +15,7 @@ This is not an official Google product.
   - Local Scan Only
   - Local + Gemini Explanation
   - Full Gemini Report
+- English/Turkish language selector
 - Demo Mode with intentionally vulnerable Apache logs, PHP login code, and Flask code
 - Overall risk score from 0 to 100 with severity explanation and top risk factors
 - Findings mapped to OWASP Top 10 and MITRE ATT&CK when available
@@ -62,6 +63,7 @@ threatlensai/
 |-- database.py             SQLite history storage
 |-- threat_knowledge.py     OWASP, MITRE, remediation, and impact metadata
 |-- log_parser.py           Apache/generic log parsing
+|-- i18n.py                 English/Turkish UI strings
 |-- sample_data/            Demo log and vulnerable code samples
 |-- requirements.txt        App dependencies
 ```
@@ -149,3 +151,10 @@ Do not use this project for exploitation, live attacks, unauthorized scanning, p
 
 Findings may include false positives. Validate results before production changes or incident response decisions.
 
+## Roadmap
+
+- Add more log formats such as Nginx, auth.log, Windows Event exports, and JSON logs
+- Add SARIF export for security tooling
+- Add optional PDF/HTML report export if stable
+- Add more detector tests and sample cases
+- Add analyst feedback for true positive / false positive tracking

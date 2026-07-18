@@ -10,8 +10,11 @@ from threat_knowledge import enrich_finding
 
 
 MODEL_NAME = "gemini-2.0-flash"
-REQUEST_TIMEOUT_MS = 20000
 
+LANGUAGE_NAMES = {
+    "en": "English",
+    "tr": "Turkish",
+}
 
 
 class GeminiAPIError(RuntimeError):
@@ -19,10 +22,7 @@ class GeminiAPIError(RuntimeError):
 
 
 def _get_client(api_key: str):
-    return genai.Client(
-        api_key=api_key.strip(),
-        http_options=types.HttpOptions(timeout=REQUEST_TIMEOUT_MS),
-    )
+    return genai.Client(api_key=api_key)
 
 
 def _extract_json(text: str):
@@ -56,7 +56,7 @@ PRE-DETECTION LABELS (from rule-based filter):
 {pre_labels}
 
 Perform deep analysis and return a structured JSON array. Each element is one threat finding.
-Write all human-readable fields in English.
+Write all human-readable fields in {output_language}.
 
 RULES:
 - Respond ONLY with a valid JSON array. No markdown, no extra text.
@@ -92,9 +92,9 @@ Return exactly this structure:
 CODE_ANALYSIS_PROMPT = """You are ThreatLens AI, a senior application security engineer specializing in OWASP vulnerabilities.
 
 Analyze the following code snippet for security vulnerabilities.
-Write all human-readable fields in English.
+Write all human-readable fields in {output_language}.
 
-SOURCE TYPE: {source_type}
+LANGUAGE: {language}
 
 CODE:
 {code_snippet}
@@ -142,11 +142,11 @@ OVERALL RISK SCORE: {risk_score}/100
 SEVERITY LABEL: {severity_label}
 
 Write a clear executive summary that a CEO or business manager can act on.
-Write all human-readable fields in English.
+Write all human-readable fields in {output_language}.
 
 RULES:
 - Respond ONLY with a valid JSON object. No markdown, no text outside JSON.
-- Use clear wording. Avoid jargon.
+- Use plain language. Avoid jargon.
 - Be honest about risk level.
 - Recommended next steps must be prioritized by business risk.
 
@@ -161,9 +161,28 @@ Return exactly this structure:
 }}"""
 
 
+TURKISH_EXPLANATION_PROMPT = """Sen ThreatLens AI'sin. Teknik bilgisi olmayan kullanicilara sade Turkce ile siber guvenlik analizi yapan bir asistansin.
+
+Asagidaki teknik guvenlik bulgusunu Turkce olarak acikla. Hedef kitle: kucuk isletme sahibi veya teknik olmayan yonetici.
+
+TEKNIK BULGU:
+{technical_finding}
+
+KURAL:
+- Sadece gecerli JSON dondur. JSON disinda hicbir metin olmasin.
+
+Bu yapiyi dondur:
+{{
+  "basit_aciklama": "Teknik olmayan birinin anlayacagi sade Turkce aciklama",
+  "tehlike_seviyesi": "Kritik | Yuksek | Orta | Dusuk",
+  "ne_olabilir": "Bu acik kotuye kullanilirsa ne olur",
+  "hemen_yapilacaklar": ["adim 1", "adim 2", "adim 3"],
+  "uzun_vadeli_cozum": ["adim 1", "adim 2"],
+  "is_etkisi": "Bu guvenlik acigi isletmenize nasil zarar verebilir"
+}}"""
+
 
 def _call_gemini(api_key: str, prompt: str) -> str:
-    api_key = (api_key or "").strip()
     if not api_key:
         raise GeminiAPIError("Gemini API key is missing.")
     client = _get_client(api_key)
@@ -178,10 +197,11 @@ def _call_gemini(api_key: str, prompt: str) -> str:
     return response.text or ""
 
 
-def analyze_logs(log_content: str, pre_labels: str, api_key: str) -> list:
+def analyze_logs(log_content: str, pre_labels: str, api_key: str, language: str = "en") -> list:
     prompt = LOG_ANALYSIS_PROMPT.format(
         log_content=log_content[:5000],
         pre_labels=pre_labels,
+        output_language=LANGUAGE_NAMES.get(language, "English"),
     )
     try:
         text = _call_gemini(api_key, prompt)
@@ -193,14 +213,16 @@ def analyze_logs(log_content: str, pre_labels: str, api_key: str) -> list:
 
 def analyze_code(
     code_snippet: str,
-    source_type: str,
+    code_language: str,
     pre_labels: str,
     api_key: str,
+    language: str = "en",
 ) -> list:
     prompt = CODE_ANALYSIS_PROMPT.format(
-        source_type=source_type,
+        language=code_language,
         code_snippet=code_snippet[:5000],
         pre_labels=pre_labels,
+        output_language=LANGUAGE_NAMES.get(language, "English"),
     )
     try:
         text = _call_gemini(api_key, prompt)
@@ -215,11 +237,13 @@ def generate_executive_summary(
     risk_score: int,
     severity_label: str,
     api_key: str,
+    language: str = "en",
 ) -> dict:
     prompt = EXECUTIVE_SUMMARY_PROMPT.format(
         findings_json=json.dumps(findings, indent=2)[:3500],
         risk_score=risk_score,
         severity_label=severity_label,
+        output_language=LANGUAGE_NAMES.get(language, "English"),
     )
     try:
         text = _call_gemini(api_key, prompt)
@@ -227,6 +251,18 @@ def generate_executive_summary(
         return result if isinstance(result, dict) else _default_summary(severity_label)
     except Exception as exc:
         return _default_summary(severity_label, str(exc))
+
+
+def translate_to_turkish(finding: dict, api_key: str) -> dict:
+    prompt = TURKISH_EXPLANATION_PROMPT.format(
+        technical_finding=json.dumps(finding, indent=2, ensure_ascii=False)[:2500]
+    )
+    try:
+        text = _call_gemini(api_key, prompt)
+        result = _extract_json(text)
+        return result if isinstance(result, dict) else {}
+    except Exception as exc:
+        return {"error": str(exc)}
 
 
 def test_api_key(api_key: str) -> tuple:

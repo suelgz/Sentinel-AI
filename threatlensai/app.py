@@ -1,9 +1,14 @@
 from __future__ import annotations
 
+import sys
+from pathlib import Path
+
+# Fix import path resolution precedence for Streamlit execution
+sys.path.insert(0, str(Path(__file__).parent.absolute()))
+
 import html
 import json
 from datetime import datetime
-from pathlib import Path
 from typing import Any
 
 import pandas as pd
@@ -54,94 +59,66 @@ st.markdown(
     --tl-orange: #ff7a45;
     --tl-red: #ff4d5f;
   }
-  .block-container { 
-    padding-top: 1rem; 
-    max-width: 1280px; 
-  }
-  .tl-page-header {
-    padding: 16px 0 24px 0;
-    border-bottom: 1px solid var(--tl-border);
-    margin-bottom: 24px;
-  }
-  .tl-page-title {
-    color: var(--tl-text);
-    font-size: 1.5rem;
-    line-height: 1.2;
-    font-weight: 700;
-    margin: 0 0 4px 0;
-  }
-  .tl-page-description {
-    color: var(--tl-muted);
-    font-size: 0.875rem;
-    margin: 0;
-    line-height: 1.4;
-  }
-  .tl-metrics-row {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-    gap: 16px;
-    margin-bottom: 32px;
-  }
-  .tl-metric-card {
+  .block-container { padding-top: 1.4rem; max-width: 1280px; }
+  .tl-hero {
     border: 1px solid var(--tl-border);
-    background: var(--tl-panel);
+    background: linear-gradient(135deg, rgba(37,215,242,.12), rgba(39,217,141,.06));
     border-radius: 8px;
-    padding: 16px;
-    display: flex;
-    flex-direction: column;
-    justify-content: space-between;
+    padding: 22px 24px;
+    margin-bottom: 18px;
   }
-  .tl-metric-label {
-    color: var(--tl-muted);
-    text-transform: uppercase;
-    font-size: 0.65rem;
-    letter-spacing: 0.08em;
-    margin-bottom: 8px;
-    font-weight: 600;
-  }
-  .tl-metric-value {
+  .tl-title {
     color: var(--tl-text);
-    font-size: 1.875rem;
+    font-size: 2.2rem;
+    line-height: 1.1;
     font-weight: 800;
-    line-height: 1;
-    margin-bottom: 4px;
+    margin: 0 0 6px 0;
   }
-  .tl-metric-note {
-    color: var(--tl-muted);
-    font-size: 0.75rem;
-    line-height: 1.3;
+  .tl-subtitle {
+    color: var(--tl-cyan);
+    font-size: 1.05rem;
+    font-weight: 650;
+    margin-bottom: 8px;
   }
-  .tl-section-title {
-    color: var(--tl-text);
-    font-size: 1rem;
-    font-weight: 700;
-    margin: 32px 0 16px 0;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    color: var(--tl-muted);
-  }
+  .tl-muted { color: var(--tl-muted); }
   .tl-card {
     border: 1px solid var(--tl-border);
     background: var(--tl-panel);
     border-radius: 8px;
     padding: 16px;
+    min-height: 108px;
+  }
+  .tl-card-label {
+    color: var(--tl-muted);
+    text-transform: uppercase;
+    font-size: .72rem;
+    letter-spacing: .08em;
+    margin-bottom: 7px;
+  }
+  .tl-card-value {
+    color: var(--tl-text);
+    font-size: 1.55rem;
+    font-weight: 800;
+  }
+  .tl-card-note {
+    color: var(--tl-muted);
+    font-size: .82rem;
+    margin-top: 4px;
   }
   .tl-finding {
     border: 1px solid var(--tl-border);
-    border-left-width: 4px;
+    border-left-width: 5px;
     background: var(--tl-panel-soft);
     border-radius: 8px;
     padding: 14px 16px;
     margin: 12px 0;
   }
   .tl-badge {
-    border-radius: 6px;
+    border-radius: 999px;
     padding: 4px 10px;
     font-weight: 700;
-    font-size: 0.7rem;
+    font-size: .76rem;
     display: inline-block;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
   }
   .tl-evidence {
     background: #07101c;
@@ -152,8 +129,7 @@ st.markdown(
     white-space: pre-wrap;
     overflow-wrap: anywhere;
     font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
-    font-size: 0.8rem;
-    line-height: 1.4;
+    font-size: .84rem;
   }
   section[data-testid="stSidebar"] {
     border-right: 1px solid var(--tl-border);
@@ -165,29 +141,12 @@ st.markdown(
   }
   .stButton > button, .stDownloadButton > button {
     border-radius: 6px;
-    min-height: 38px;
-    font-weight: 600;
-    font-size: 0.875rem;
-  }
-  .tl-input-section {
-    display: grid;
-    grid-template-columns: 2fr 1fr;
-    gap: 24px;
-    margin-bottom: 24px;
-  }
-  .tl-demo-card {
-    border: 1px solid var(--tl-border);
-    background: var(--tl-panel);
-    border-radius: 8px;
-    padding: 16px;
-  }
-  .stTextArea textarea {
-    font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+    min-height: 42px;
+    font-weight: 700;
   }
   @media (max-width: 780px) {
-    .tl-page-title { font-size: 1.25rem; }
-    .tl-metrics-row { grid-template-columns: 1fr; }
-    .tl-input-section { grid-template-columns: 1fr; }
+    .tl-title { font-size: 1.65rem; }
+    .tl-card { min-height: auto; }
   }
 </style>
 """,
@@ -457,12 +416,10 @@ def build_json_export(result: dict[str, Any], language: str) -> str:
 def render_metric_card(label: str, value: str, note: str = "") -> None:
     st.markdown(
         f"""
-<div class="tl-metric-card">
-  <div>
-    <div class="tl-metric-label">{html.escape(label)}</div>
-    <div class="tl-metric-value">{html.escape(value)}</div>
-  </div>
-  <div class="tl-metric-note">{html.escape(note)}</div>
+<div class="tl-card">
+  <div class="tl-card-label">{html.escape(label)}</div>
+  <div class="tl-card-value">{html.escape(value)}</div>
+  <div class="tl-card-note">{html.escape(note)}</div>
 </div>
 """,
         unsafe_allow_html=True,
@@ -482,13 +439,13 @@ def render_finding(finding: dict[str, Any], index: int) -> None:
         f"""
 <div class="tl-finding" style="border-left-color:{color}">
   <div style="display:flex;gap:10px;justify-content:space-between;align-items:flex-start;flex-wrap:wrap">
-    <div style="font-weight:700;font-size:0.95rem">#{index} {threat}</div>
+    <div style="font-weight:800;font-size:1rem">#{index} {threat}</div>
     <span class="tl-badge" style="{badge_style}">{html.escape(severity)}</span>
   </div>
-  <div class="tl-muted" style="margin-top:6px;font-size:0.8rem">
+  <div class="tl-muted" style="margin-top:6px">
     Confidence: {confidence}% AI / {rule_confidence}% Rule · Source: {html.escape(str(finding.get("analysis_source", "Rule Engine")))}
   </div>
-  <div class="tl-muted" style="margin-top:6px;font-size:0.8rem">
+  <div class="tl-muted" style="margin-top:6px">
     OWASP: {html.escape(str(finding.get("owasp_category", "N/A")))}<br>
     MITRE ATT&CK: {html.escape(str(mitre))}
   </div>
@@ -539,7 +496,7 @@ def render_results_tabs(result: dict[str, Any], api_key: str) -> None:
             st.markdown("### 📊 Risk Score")
             st.progress(min(risk_score, 100) / 100)
             st.markdown(
-                f"<div style='font-size:2.5rem;font-weight:900;color:{get_severity_color(severity)}'>{risk_score}/100</div>",
+                f"<div style='font-size:3rem;font-weight:900;color:{get_severity_color(severity)}'>{risk_score}/100</div>",
                 unsafe_allow_html=True,
             )
             st.markdown(f"**{severity}**")
@@ -746,63 +703,51 @@ with st.sidebar:
     st.caption(t("sidebar_note"))
 
 
-# Page header
 st.markdown(
     f"""
-<div class="tl-page-header">
-  <div class="tl-page-title">ThreatLens AI</div>
-  <div class="tl-page-description">{t("hero_description")}</div>
+<div class="tl-hero">
+  <div class="tl-title">🛡️ ThreatLens AI</div>
+  <div class="tl-subtitle">Gemini-Powered Cybersecurity Risk Analyzer</div>
+  <div class="tl-muted">{t("hero_description")}</div>
 </div>
 """,
     unsafe_allow_html=True,
 )
 
-# Metrics row
 result = st.session_state.get("result")
+status, _ = status_text(st.session_state.get("api_key", ""), result)
 total_findings = len(result.get("findings", [])) if result else 0
 high_findings = (
     sum(1 for item in result.get("findings", []) if item.get("severity") in {"Critical", "High"})
     if result
     else 0
 )
-detected_input = st.session_state.get("input_type", "Apache Log")
 
-st.markdown('<div class="tl-metrics-row">', unsafe_allow_html=True)
-col1, col2, col3, col4 = st.columns(4)
+card1, card2, card3, card4, card5 = st.columns(5)
+with card1:
+    render_metric_card("Overall Risk Score", f"{result.get('risk_score', 0) if result else 0}/100", result.get("severity", "Clean") if result else "Clean")
+with card2:
+    render_metric_card("Total Findings", str(total_findings), t("local_and_ai"))
+with card3:
+    render_metric_card("High/Critical", str(high_findings), t("priority_items"))
+with card4:
+    render_metric_card("Gemini Status", status.split(":")[0], t("optional_enrichment"))
+with card5:
+    render_metric_card("Analysis Mode", st.session_state["analysis_mode"], st.session_state["input_type"])
 
-with col1:
-    render_metric_card(
-        "Overall Risk",
-        f"{result.get('risk_score', 0) if result else 0}/100",
-        result.get("severity", "Clean") if result else "No analysis"
-    )
-with col2:
-    render_metric_card(
-        "Findings",
-        str(total_findings),
-        "Local & AI" if result else "Run analysis"
-    )
-with col3:
-    render_metric_card(
-        "Critical",
-        str(high_findings),
-        "Priority items" if result else "None detected"
-    )
-with col4:
-    render_metric_card(
-        "Detected Input",
-        detected_input.split()[0],
-        "Analysis type"
-    )
 
-st.markdown('</div>', unsafe_allow_html=True)
+st.markdown(f"## 🛡️ {t('threat_detection')}")
+top_left, top_right = st.columns([2, 1])
+with top_right:
+    st.markdown(f"### 🧪 {t('demo_mode')}")
+    if st.button("🧪 Load Demo Data", use_container_width=True):
+        demo_text, demo_name = read_sample(st.session_state["input_type"])
+        st.session_state["input_text"] = demo_text
+        st.session_state["input_name"] = demo_name
+        st.rerun()
+    st.caption(t("demo_help"))
 
-# Threat detection section
-st.markdown('<div class="tl-section-title">Threat Detection</div>', unsafe_allow_html=True)
-
-col_left, col_right = st.columns([2, 1], gap="large")
-
-with col_left:
+with top_left:
     uploaded_file = st.file_uploader(t("upload_optional"), type=["txt", "log", "py", "php", "js", "json", "conf"])
     if uploaded_file and uploaded_file.name != st.session_state.get("last_upload_name"):
         st.session_state["input_text"] = decode_upload(uploaded_file)
@@ -810,32 +755,19 @@ with col_left:
         st.session_state["last_upload_name"] = uploaded_file.name
         st.rerun()
 
-    st.text_input(t("input_name"), key="input_name", label_visibility="collapsed")
+    st.text_input(t("input_name"), key="input_name")
     st.text_area(
         t("input_text"),
         key="input_text",
-        height=280,
+        height=260,
         placeholder=t("input_placeholder"),
-        label_visibility="collapsed",
     )
 
-with col_right:
-    st.markdown('<div class="tl-demo-card">', unsafe_allow_html=True)
-    st.markdown(f"**Demo Mode**")
-    if st.button("Load Demo", use_container_width=True):
-        demo_text, demo_name = read_sample(st.session_state["input_type"])
-        st.session_state["input_text"] = demo_text
-        st.session_state["input_name"] = demo_name
-        st.rerun()
-    st.caption(t("demo_help"))
-    st.markdown('</div>', unsafe_allow_html=True)
-
-# Action buttons
-run_col, clear_col = st.columns([2, 1], gap="medium")
+run_col, clear_col = st.columns([2, 1])
 with run_col:
-    run_clicked = st.button("Run Analysis", type="primary", use_container_width=True)
+    run_clicked = st.button("🚀 Run ThreatLens Analysis", type="primary", use_container_width=True)
 with clear_col:
-    if st.button("Clear", use_container_width=True):
+    if st.button(t("clear"), use_container_width=True):
         st.session_state["input_text"] = ""
         st.session_state["result"] = None
         st.rerun()
@@ -860,7 +792,6 @@ if run_clicked:
 
 
 if st.session_state.get("result"):
-    st.divider()
     render_results_tabs(st.session_state["result"], st.session_state.get("api_key", ""))
 else:
     st.info(t("empty_state"))

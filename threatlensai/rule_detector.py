@@ -130,6 +130,13 @@ PATTERNS: dict[str, dict[str, Any]] = {
     },
 }
 
+# Precompile regexes for optimal detection performance
+for _cfg in PATTERNS.values():
+    for _p in _cfg["patterns"]:
+        _p["compiled"] = re.compile(_p["regex"], re.IGNORECASE)
+
+
+
 
 BRUTE_FORCE_MIN_FAILS = 5
 AUTH_PATH_HINTS = ("login", "signin", "auth", "account", "admin", "wp-login", "session")
@@ -199,7 +206,7 @@ def run_rule_detection(df: pd.DataFrame, raw_text: str = "") -> list[dict[str, A
         variants = _line_variants(original_line)
         for threat_name, cfg in PATTERNS.items():
             for pattern in cfg["patterns"]:
-                if any(re.search(pattern["regex"], variant, flags=re.IGNORECASE) for variant in variants):
+                if any(pattern["compiled"].search(variant) for variant in variants):
                     hit = threat_hits[threat_name]
                     _append_unique(hit["matched_lines"], original_line)
                     _append_unique(hit["flagged_raw"], original_line)
