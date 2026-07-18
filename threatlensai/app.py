@@ -569,6 +569,19 @@ def render_result_metrics(result: dict[str, Any]) -> None:
         render_metric_card("Flagged Lines", str(breakdown.get("flagged_lines_count", 0)), "Evidence matches")
 
 
+def render_analysis_details(result: dict[str, Any]) -> None:
+    findings = result.get("findings", [])
+    rule_findings = result.get("rule_findings", [])
+    breakdown = get_score_breakdown(findings, rule_findings)
+
+    st.markdown("### Analysis Details")
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric(t("input_type"), result.get("input_type", result.get("analysis_type", "-")).title())
+    c2.metric(t("avg_confidence"), f"{int(breakdown.get('avg_gemini_confidence', 0) * 100)}%")
+    c3.metric("Gemini Used", "Yes" if result.get("gemini_used") else "No")
+    c4.metric(t("analysis_id"), str(result.get("analysis_id", "-")))
+
+
 def render_results_page(result: dict[str, Any], api_key: str) -> None:
     findings = result.get("findings", [])
     rule_findings = result.get("rule_findings", [])
@@ -576,8 +589,6 @@ def render_results_page(result: dict[str, Any], api_key: str) -> None:
     severity = result.get("severity", "Clean")
     summary = result.get("executive_summary", {})
     top_recommendations = result.get("top_recommendations", [])
-    breakdown = get_score_breakdown(findings, rule_findings)
-
     st.markdown('<div class="tl-page-kicker">Analysis Results</div>', unsafe_allow_html=True)
     st.markdown("# Results")
     render_result_metrics(result)
@@ -614,13 +625,6 @@ def render_results_page(result: dict[str, Any], api_key: str) -> None:
                     st.markdown(f"- {item}")
             else:
                 st.success(t("no_recommendations"))
-
-        st.markdown("### Analysis Details")
-        c1, c2, c3, c4 = st.columns(4)
-        c1.metric(t("input_type"), result.get("input_type", result.get("analysis_type", "-")).title())
-        c2.metric(t("avg_confidence"), f"{int(breakdown.get('avg_gemini_confidence', 0) * 100)}%")
-        c3.metric("Gemini Used", "Yes" if result.get("gemini_used") else "No")
-        c4.metric(t("analysis_id"), str(result.get("analysis_id", "-")))
 
     with tab_findings:
         if not findings:
@@ -816,6 +820,10 @@ def render_sidebar() -> None:
         )
         st.session_state["demo_mode"] = st.toggle("Demo Mode", value=st.session_state.get("demo_mode", True))
         st.caption(t("sidebar_note"))
+
+        if st.session_state.get("current_page") == "Results" and st.session_state.get("result"):
+            st.divider()
+            render_analysis_details(st.session_state["result"])
 
 
 def render_home_page() -> None:
