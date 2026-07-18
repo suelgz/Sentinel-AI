@@ -488,6 +488,24 @@ def render_metric_card(label: str, value: str, note: str = "") -> None:
     )
 
 
+def render_detected_input_card(result: dict[str, Any]) -> None:
+    input_type = str(result.get("input_type") or result.get("analysis_type") or "Unknown Input")
+    input_name = str(result.get("input_name") or "manual-input")
+    line_count = int(result.get("line_count") or 0)
+    log_format = str(result.get("log_format") or "auto")
+    note = f"{html.escape(input_name)} - {line_count} line(s) - {html.escape(log_format)}"
+    st.markdown(
+        f"""
+<div class="tl-card" style="min-height:auto;margin-bottom:14px">
+  <div class="tl-card-label">Input Reviewed</div>
+  <div class="tl-card-value">{html.escape(input_type)}</div>
+  <div class="tl-card-note">{note}</div>
+</div>
+""",
+        unsafe_allow_html=True,
+    )
+
+
 def render_finding(finding: dict[str, Any], index: int) -> None:
     severity = finding.get("severity", "Unknown")
     color, badge_style = severity_style(severity)
