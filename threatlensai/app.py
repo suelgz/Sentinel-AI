@@ -8,6 +8,7 @@ sys.path.insert(0, str(Path(__file__).parent.absolute()))
 
 import html
 import json
+import time
 from datetime import datetime
 from typing import Any
 
@@ -16,7 +17,7 @@ import streamlit as st
 
 from database import delete_analysis, get_all_analyses, get_analysis_detail, save_analysis, save_uploaded_file
 from gemini_client import GeminiAPIError, analyze_code, analyze_logs, generate_executive_summary
-from i18n import APP_NAME, translate_text
+APP_NAME = "ThreatLens AI"
 from log_parser import get_log_stats, parse_log_file
 from report_generator import build_text_report
 from risk_scoring import compute_risk_score, get_score_breakdown, get_severity_color
@@ -32,9 +33,6 @@ from threat_knowledge import (
 SAMPLE_DATA_DIR = Path(__file__).parent / "sample_data"
 ANALYSIS_MODES = ["Local Scan Only", "Local + Gemini Explanation", "Full Gemini Report"]
 INPUT_TYPES = ["Apache Log", "PHP Code", "Flask Code", "Custom Code"]
-LANGUAGES = {"English": "en", "Turkish": "tr"}
-
-
 st.set_page_config(
     page_title=APP_NAME,
     page_icon="🛡️",
@@ -59,13 +57,14 @@ st.markdown(
     --tl-orange: #ff7a45;
     --tl-red: #ff4d5f;
   }
-  .block-container { padding-top: 1.4rem; max-width: 1280px; }
+  .block-container { padding-top: 3.2rem; padding-bottom: 3rem; max-width: 1280px; }
   .tl-hero {
     border: 1px solid var(--tl-border);
     background: linear-gradient(135deg, rgba(37,215,242,.12), rgba(39,217,141,.06));
     border-radius: 8px;
-    padding: 22px 24px;
-    margin-bottom: 18px;
+    padding: 26px 28px;
+    margin: 8px 0 24px 0;
+    overflow: visible;
   }
   .tl-title {
     color: var(--tl-text);
@@ -105,6 +104,13 @@ st.markdown(
     font-size: .82rem;
     margin-top: 4px;
   }
+  .tl-action-card {
+    border: 1px solid var(--tl-border);
+    background: var(--tl-panel);
+    border-radius: 8px;
+    padding: 18px;
+    min-height: 100%;
+  }
   .tl-finding {
     border: 1px solid var(--tl-border);
     border-left-width: 5px;
@@ -131,6 +137,15 @@ st.markdown(
     font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
     font-size: .84rem;
   }
+  .tl-page-kicker {
+    color: var(--tl-muted);
+    text-transform: uppercase;
+    font-size: .72rem;
+    letter-spacing: .08em;
+    font-weight: 700;
+    margin-bottom: 4px;
+  }
+  .tl-section-spacer { margin-top: 18px; }
   section[data-testid="stSidebar"] {
     border-right: 1px solid var(--tl-border);
   }
@@ -145,6 +160,7 @@ st.markdown(
     font-weight: 700;
   }
   @media (max-width: 780px) {
+    .block-container { padding-top: 2.4rem; }
     .tl-title { font-size: 1.65rem; }
     .tl-card { min-height: auto; }
   }
@@ -154,8 +170,69 @@ st.markdown(
 )
 
 
+TEXT = {
+    "hero_description": "ThreatLens AI combines local regex/rule-based detection with optional Gemini explanations, summaries, remediation advice, and OWASP/MITRE context for defensive security review.",
+    "gemini_api_key": "Gemini API Key",
+    "api_key_help": "Load from Streamlit secrets with GEMINI_API_KEY or paste a key for this session. The key is never stored by the app.",
+    "analysis_mode": "Analysis Mode",
+    "input_type": "Input Type",
+    "sidebar_note": "Gemini enriches local findings; local scan still works without a key.",
+    "threat_detection": "Threat Detection",
+    "demo_mode": "Demo Mode",
+    "demo_help": "Loads intentionally vulnerable sample logs or code so the app can be demonstrated without uploading a file.",
+    "upload_optional": "Upload log/code file (optional)",
+    "input_name": "Input name",
+    "input_text": "Log or code input",
+    "input_placeholder": "Paste Apache logs, PHP code, Flask code, or another snippet here...",
+    "clear": "Clear",
+    "analysis_failed": "Analysis failed: {error}",
+    "invalid_file": "Could not read uploaded file: {error}",
+    "empty_input": "Add input text, upload a file, or load demo data before running analysis.",
+    "overview": "Overview",
+    "findings": "Findings",
+    "owasp_mitre_mapping": "OWASP / MITRE",
+    "gemini_ai_explanation": "AI Explanation",
+    "report": "Report",
+    "executive_summary": "Executive Summary",
+    "score_reason": "Risk Factors",
+    "score_clean": "No local indicators were detected, so the score remains clean. Continue validating with real context.",
+    "score_low": "The score is low because the detected patterns have limited severity or confidence.",
+    "score_medium": "The score is medium because one or more findings need validation and remediation planning.",
+    "score_high": "The score is elevated because {count} high or critical finding(s) affect sensitive attack paths.",
+    "rule_signals": "Rule Signals",
+    "flagged_lines": "Flagged Lines",
+    "avg_confidence": "Avg Confidence",
+    "analysis_id": "Analysis ID",
+    "no_recommendations": "No prioritized remediation items are available.",
+    "no_threats_detected": "No threats detected by the current local rules.",
+    "evidence_and_remediation": "Evidence & Remediation",
+    "technical_explanation": "Technical Explanation",
+    "business_impact": "Business Impact",
+    "immediate_fix": "Immediate Fix",
+    "long_term_fix": "Long-Term Fix",
+    "false_positive_note": "False Positive Note",
+    "top_priority_action": "Top Priority Action",
+    "business_risk": "Business Risk",
+    "attack_narrative": "Attack Narrative",
+    "timeline_narrative": "The visible chain starts with {first} and later includes {last}. Treat this as a triage narrative, not proof of compromise.",
+    "findings_narrative": "ThreatLens identified {count} finding(s). Review the evidence, confirm true positives, and prioritize fixes by severity.",
+    "clean_narrative": "No clear attack chain is visible in this input.",
+    "recommended_next_steps": "Recommended Next Steps",
+    "mapping_empty": "No mapping is available because no findings were detected.",
+    "attack_timeline": "Attack Timeline",
+    "report_preview": "Report Preview",
+    "history_empty": "No saved analyses yet.",
+    "load_history": "Load",
+    "delete": "Delete",
+    "threat_type": "Threat Type",
+    "summary_not_available": "Executive summary is not available.",
+    "ethical_notice_body": "ThreatLens AI is for defensive security review, education, and authorized analysis only. It must not be used for exploitation, live attacks, unauthorized scanning, phishing, malware generation, credential theft, or any activity against systems you do not own or have permission to assess.",
+}
+
+
 def t(key: str, **kwargs: Any) -> str:
-    return translate_text(key, st.session_state.get("language", "en"), **kwargs)
+    text = TEXT.get(key, key)
+    return text.format(**kwargs) if kwargs else text
 
 
 def get_secret_api_key() -> str:
@@ -167,7 +244,6 @@ def get_secret_api_key() -> str:
 
 def init_state() -> None:
     defaults = {
-        "language": "en",
         "analysis_mode": ANALYSIS_MODES[1],
         "input_type": INPUT_TYPES[0],
         "demo_mode": True,
@@ -176,6 +252,7 @@ def init_state() -> None:
         "api_key": get_secret_api_key(),
         "result": None,
         "last_upload_name": "",
+        "current_page": "Home",
     }
     for key, value in defaults.items():
         st.session_state.setdefault(key, value)
@@ -264,21 +341,8 @@ def score_explanation(score: int, severity: str, findings: list[dict[str, Any]])
     return t("score_low")
 
 
-def local_summary(severity: str, score: int, findings: list[dict[str, Any]], language: str) -> dict[str, Any]:
+def local_summary(severity: str, score: int, findings: list[dict[str, Any]]) -> dict[str, Any]:
     recommendations = generate_top_recommendations(findings, limit=3)
-    if language == "tr":
-        if findings:
-            paragraph = f"Yerel kural analizi {len(findings)} bulgu tespit etti. Genel risk skoru {score}/100 ve seviye {severity} olarak hesaplandı."
-        else:
-            paragraph = "Yerel kural analizi belirgin bir tehdit işareti bulmadı."
-        return {
-            "overall_status": severity,
-            "summary_paragraph": paragraph,
-            "top_priority_action": recommendations[0] if recommendations else "Log ve kodu düzenli olarak gözden geçirin.",
-            "estimated_business_risk": "Risk, bulguların gerçek sistemlere ulaşıp ulaşmadığına göre değişir.",
-            "positive_notes": "Analiz Gemini API anahtarı olmadan yerel kurallarla tamamlandı.",
-            "recommended_next_steps": recommendations or ["Bulguları doğrulayın", "Gerekli düzeltmeleri uygulayın", "Tekrar analiz çalıştırın"],
-        }
     if findings:
         paragraph = f"Local rule analysis detected {len(findings)} finding(s). Overall risk is {score}/100 with a {severity} severity label."
     else:
@@ -298,7 +362,6 @@ def run_threatlens_analysis(
     input_type: str,
     input_name: str,
     mode: str,
-    language: str,
     api_key: str,
 ) -> dict[str, Any]:
     content = (content or "").strip()
@@ -328,9 +391,9 @@ def run_threatlens_analysis(
     if should_send_to_gemini:
         try:
             if is_log:
-                gemini_findings = analyze_logs(flagged_content, pre_labels, api_key, language=language)
+                gemini_findings = analyze_logs(flagged_content, pre_labels, api_key)
             else:
-                gemini_findings = analyze_code(flagged_content, code_language, pre_labels, api_key, language=language)
+                gemini_findings = analyze_code(flagged_content, code_language, pre_labels, api_key)
             gemini_used = True
         except GeminiAPIError as exc:
             gemini_error = str(exc)
@@ -342,10 +405,10 @@ def run_threatlens_analysis(
 
     if should_send_to_gemini and gemini_used and mode == "Full Gemini Report":
         executive_summary = generate_executive_summary(
-            findings, risk_score, severity, api_key, language=language
+            findings, risk_score, severity, api_key
         )
     else:
-        executive_summary = local_summary(severity, risk_score, findings, language)
+        executive_summary = local_summary(severity, risk_score, findings)
 
     analysis_type = "log" if is_log else "code"
     analysis_id = save_analysis(
@@ -356,7 +419,6 @@ def run_threatlens_analysis(
         severity,
         findings,
         executive_summary=executive_summary,
-        language=language,
         top_recommendations=top_recommendations,
         attack_timeline=attack_timeline,
     )
@@ -391,7 +453,7 @@ def run_threatlens_analysis(
     }
 
 
-def build_json_export(result: dict[str, Any], language: str) -> str:
+def build_json_export(result: dict[str, Any]) -> str:
     payload = {
         "project_name": APP_NAME,
         "timestamp": datetime.now().isoformat(timespec="seconds"),
@@ -408,7 +470,7 @@ def build_json_export(result: dict[str, Any], language: str) -> str:
             if item.get("mitre_attack")
         }),
         "remediation_checklist": result.get("top_recommendations", []),
-        "ethical_notice": translate_text("ethical_notice_body", language),
+        "ethical_notice": t("ethical_notice_body"),
     }
     return json.dumps(payload, indent=2, ensure_ascii=False)
 
@@ -470,7 +532,26 @@ def render_finding(finding: dict[str, Any], index: int) -> None:
             st.caption(f"{t('false_positive_note')}: {finding.get('false_positive_note', 'N/A')}")
 
 
-def render_results_tabs(result: dict[str, Any], api_key: str) -> None:
+def render_result_metrics(result: dict[str, Any]) -> None:
+    findings = result.get("findings", [])
+    rule_findings = result.get("rule_findings", [])
+    high_findings = sum(1 for item in findings if item.get("severity") in {"Critical", "High"})
+    breakdown = get_score_breakdown(findings, rule_findings)
+
+    card1, card2, card3, card4, card5 = st.columns(5)
+    with card1:
+        render_metric_card("Overall Risk Score", f"{result.get('risk_score', 0)}/100", result.get("severity", "Clean"))
+    with card2:
+        render_metric_card("Total Findings", str(len(findings)), "Confirmed signals")
+    with card3:
+        render_metric_card("High/Critical", str(high_findings), "Priority review")
+    with card4:
+        render_metric_card("Rule Signals", str(len(rule_findings)), "Local detection")
+    with card5:
+        render_metric_card("Flagged Lines", str(breakdown.get("flagged_lines_count", 0)), "Evidence matches")
+
+
+def render_results_page(result: dict[str, Any], api_key: str) -> None:
     findings = result.get("findings", [])
     rule_findings = result.get("rule_findings", [])
     risk_score = int(result.get("risk_score", 0))
@@ -479,21 +560,26 @@ def render_results_tabs(result: dict[str, Any], api_key: str) -> None:
     top_recommendations = result.get("top_recommendations", [])
     breakdown = get_score_breakdown(findings, rule_findings)
 
-    tab_overview, tab_findings, tab_ai, tab_mapping, tab_report, tab_history = st.tabs(
+    st.markdown('<div class="tl-page-kicker">Analysis Results</div>', unsafe_allow_html=True)
+    st.markdown("# Results")
+    render_result_metrics(result)
+    st.markdown('<div class="tl-section-spacer"></div>', unsafe_allow_html=True)
+    render_detected_input_card(result)
+
+    tab_overview, tab_findings, tab_mapping, tab_ai, tab_report = st.tabs(
         [
-            f"📊 {t('overview')}",
-            f"🚨 {t('findings')}",
-            f"🧠 {t('gemini_ai_explanation')}",
-            f"🧭 {t('owasp_mitre_mapping')}",
-            f"🧾 {t('report')}",
-            f"🕘 {t('history')}",
+            t("overview"),
+            t("findings"),
+            t("owasp_mitre_mapping"),
+            t("gemini_ai_explanation"),
+            t("report"),
         ]
     )
 
     with tab_overview:
         left, right = st.columns([1, 2])
         with left:
-            st.markdown("### 📊 Risk Score")
+            st.markdown("### Risk Score")
             st.progress(min(risk_score, 100) / 100)
             st.markdown(
                 f"<div style='font-size:3rem;font-weight:900;color:{get_severity_color(severity)}'>{risk_score}/100</div>",
@@ -501,22 +587,21 @@ def render_results_tabs(result: dict[str, Any], api_key: str) -> None:
             )
             st.markdown(f"**{severity}**")
         with right:
-            st.markdown(f"### ✨ {t('executive_summary')}")
+            st.markdown(f"### {t('executive_summary')}")
             st.write(summary.get("summary_paragraph", t("summary_not_available")))
             st.markdown(f"**{t('score_reason')}**")
             st.info(score_explanation(risk_score, severity, findings))
-            st.markdown(f"**{t('top_risk_factors')}**")
             if top_recommendations:
                 for item in top_recommendations[:5]:
                     st.markdown(f"- {item}")
             else:
                 st.success(t("no_recommendations"))
 
-        st.markdown("### 🧪 Analysis Details")
+        st.markdown("### Analysis Details")
         c1, c2, c3, c4 = st.columns(4)
-        c1.metric(t("rule_signals"), len(rule_findings))
-        c2.metric(t("flagged_lines"), breakdown.get("flagged_lines_count", 0))
-        c3.metric(t("avg_confidence"), f"{int(breakdown.get('avg_gemini_confidence', 0) * 100)}%")
+        c1.metric(t("input_type"), result.get("input_type", result.get("analysis_type", "-")).title())
+        c2.metric(t("avg_confidence"), f"{int(breakdown.get('avg_gemini_confidence', 0) * 100)}%")
+        c3.metric("Gemini Used", "Yes" if result.get("gemini_used") else "No")
         c4.metric(t("analysis_id"), str(result.get("analysis_id", "-")))
 
     with tab_findings:
@@ -525,37 +610,6 @@ def render_results_tabs(result: dict[str, Any], api_key: str) -> None:
         else:
             for index, finding in enumerate(findings, 1):
                 render_finding(finding, index)
-
-    with tab_ai:
-        status, level = status_text(api_key, result)
-        getattr(st, level)(status)
-        st.markdown(f"### ✨ {t('executive_summary')}")
-        st.write(summary.get("summary_paragraph", t("summary_not_available")))
-        col1, col2 = st.columns(2)
-        with col1:
-            st.markdown(f"**{t('top_priority_action')}**")
-            st.warning(summary.get("top_priority_action", "N/A"))
-            st.markdown(f"**{t('business_risk')}**")
-            st.write(summary.get("estimated_business_risk", "N/A"))
-        with col2:
-            st.markdown(f"**🧬 {t('attack_narrative')}**")
-            if result.get("attack_timeline"):
-                first = result["attack_timeline"][0]
-                last = result["attack_timeline"][-1]
-                st.write(
-                    t(
-                        "timeline_narrative",
-                        first=first.get("threat_type", "unknown"),
-                        last=last.get("threat_type", "unknown"),
-                    )
-                )
-            elif findings:
-                st.write(t("findings_narrative", count=len(findings)))
-            else:
-                st.write(t("clean_narrative"))
-            st.markdown(f"**{t('recommended_next_steps')}**")
-            for step in summary.get("recommended_next_steps", []):
-                st.markdown(f"- {step}")
 
     with tab_mapping:
         if not findings:
@@ -575,8 +629,39 @@ def render_results_tabs(result: dict[str, Any], api_key: str) -> None:
             st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
 
         if result.get("attack_timeline"):
-            st.markdown(f"### 🧬 {t('attack_timeline')}")
+            st.markdown(f"### {t('attack_timeline')}")
             st.dataframe(pd.DataFrame(result["attack_timeline"]), use_container_width=True, hide_index=True)
+
+    with tab_ai:
+        status, level = status_text(api_key, result)
+        getattr(st, level)(status)
+        st.markdown("### Gemini Explanation")
+        st.write(summary.get("summary_paragraph", t("summary_not_available")))
+        col1, col2 = st.columns(2)
+        with col1:
+            st.markdown(f"**{t('top_priority_action')}**")
+            st.warning(summary.get("top_priority_action", "N/A"))
+            st.markdown(f"**{t('business_risk')}**")
+            st.write(summary.get("estimated_business_risk", "N/A"))
+        with col2:
+            st.markdown(f"**{t('attack_narrative')}**")
+            if result.get("attack_timeline"):
+                first = result["attack_timeline"][0]
+                last = result["attack_timeline"][-1]
+                st.write(
+                    t(
+                        "timeline_narrative",
+                        first=first.get("threat_type", "unknown"),
+                        last=last.get("threat_type", "unknown"),
+                    )
+                )
+            elif findings:
+                st.write(t("findings_narrative", count=len(findings)))
+            else:
+                st.write(t("clean_narrative"))
+            st.markdown(f"**{t('recommended_next_steps')}**")
+            for step in summary.get("recommended_next_steps", []):
+                st.markdown(f"- {step}")
 
     with tab_report:
         text_report = build_text_report(
@@ -586,34 +671,32 @@ def render_results_tabs(result: dict[str, Any], api_key: str) -> None:
             severity,
             findings,
             summary,
-            language=st.session_state["language"],
             rule_findings=rule_findings,
             attack_timeline=result.get("attack_timeline", []),
             top_recommendations=top_recommendations,
             analysis_mode=result.get("analysis_mode", ""),
             gemini_used=result.get("gemini_used", False),
         )
-        json_report = build_json_export(result, st.session_state["language"])
+        json_report = build_json_export(result)
+        st.markdown("### Report")
         st.text_area(t("report_preview"), text_report, height=300)
+        st.markdown("### Export Options")
         col_txt, col_json = st.columns(2)
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         col_txt.download_button(
-            "🧾 Download TXT Report",
+            "Download TXT Report",
             data=text_report,
             file_name=f"threatlens_ai_report_{timestamp}.txt",
             mime="text/plain",
             use_container_width=True,
         )
         col_json.download_button(
-            "🧾 Download JSON Report",
+            "Download JSON Report",
             data=json_report,
             file_name=f"threatlens_ai_report_{timestamp}.json",
             mime="application/json",
             use_container_width=True,
         )
-
-    with tab_history:
-        render_history()
 
 
 def render_history() -> None:
@@ -635,7 +718,7 @@ def render_history() -> None:
             col1, col2 = st.columns([1, 1])
             with col1:
                 if st.button(t("load_history"), key=f"load_{item['id']}"):
-                    st.session_state.result = {
+                    st.session_state["result"] = {
                         "analysis_id": item["id"],
                         "analysis_type": item.get("analysis_type", ""),
                         "analysis_mode": "History",
@@ -650,10 +733,12 @@ def render_history() -> None:
                         "gemini_used": False,
                         "gemini_error": "",
                     }
+                    st.session_state["current_page"] = "Results"
                     st.rerun()
             with col2:
                 if st.button(t("delete"), key=f"delete_{item['id']}"):
                     delete_analysis(item["id"])
+                    st.session_state["current_page"] = "History"
                     st.rerun()
 
 
@@ -666,124 +751,144 @@ def _safe_json(value: Any, default: Any) -> Any:
         return default
 
 
-init_state()
-
-with st.sidebar:
-    st.markdown("## 🛡️ ThreatLens AI")
-    selected_language = st.selectbox(
-        "Language / Dil",
-        list(LANGUAGES.keys()),
-        index=0 if st.session_state["language"] == "en" else 1,
-    )
-    st.session_state["language"] = LANGUAGES[selected_language]
-
-    st.markdown("### 🔑 Gemini API")
-    st.session_state["api_key"] = st.text_input(
-        t("gemini_api_key"),
-        value=st.session_state.get("api_key", ""),
-        type="password",
-        placeholder="AIza...",
-        help=t("api_key_help"),
-    )
-    status, level = status_text(st.session_state["api_key"], st.session_state.get("result"))
-    getattr(st, level)(status)
-
-    st.markdown("### ⚙️ Analysis")
-    st.session_state["analysis_mode"] = st.selectbox(
-        t("analysis_mode"),
-        ANALYSIS_MODES,
-        index=ANALYSIS_MODES.index(st.session_state.get("analysis_mode", ANALYSIS_MODES[1])),
-    )
-    st.session_state["input_type"] = st.selectbox(
-        t("input_type"),
-        INPUT_TYPES,
-        index=INPUT_TYPES.index(st.session_state.get("input_type", INPUT_TYPES[0])),
-    )
-    st.session_state["demo_mode"] = st.toggle("🧪 Demo Mode", value=st.session_state.get("demo_mode", True))
-    st.caption(t("sidebar_note"))
+def clear_analysis_input() -> None:
+    st.session_state["input_text"] = ""
+    st.session_state["result"] = None
+    st.session_state["current_page"] = "Home"
 
 
-st.markdown(
-    f"""
+def render_sidebar() -> None:
+    with st.sidebar:
+        st.markdown("## ThreatLens AI")
+        st.caption("Defensive analysis workspace")
+
+        if st.button("Home", use_container_width=True):
+            st.session_state["current_page"] = "Home"
+            st.rerun()
+        results_disabled = not bool(st.session_state.get("result"))
+        if st.button("Results", use_container_width=True, disabled=results_disabled):
+            st.session_state["current_page"] = "Results"
+            st.rerun()
+        if st.button("History", use_container_width=True):
+            st.session_state["current_page"] = "History"
+            st.rerun()
+
+        st.divider()
+        st.markdown("### Gemini API")
+        st.session_state["api_key"] = st.text_input(
+            t("gemini_api_key"),
+            value=st.session_state.get("api_key", ""),
+            type="password",
+            placeholder="AIza...",
+            help=t("api_key_help"),
+        )
+        status, level = status_text(st.session_state["api_key"], st.session_state.get("result"))
+        getattr(st, level)(status)
+
+        st.markdown("### Analysis")
+        st.session_state["analysis_mode"] = st.selectbox(
+            t("analysis_mode"),
+            ANALYSIS_MODES,
+            index=ANALYSIS_MODES.index(st.session_state.get("analysis_mode", ANALYSIS_MODES[1])),
+        )
+        st.session_state["input_type"] = st.selectbox(
+            t("input_type"),
+            INPUT_TYPES,
+            index=INPUT_TYPES.index(st.session_state.get("input_type", INPUT_TYPES[0])),
+        )
+        st.session_state["demo_mode"] = st.toggle("Demo Mode", value=st.session_state.get("demo_mode", True))
+        st.caption(t("sidebar_note"))
+
+
+def render_home_page() -> None:
+    st.markdown(
+        f"""
 <div class="tl-hero">
-  <div class="tl-title">🛡️ ThreatLens AI</div>
+  <div class="tl-title">ThreatLens AI</div>
   <div class="tl-subtitle">Gemini-Powered Cybersecurity Risk Analyzer</div>
   <div class="tl-muted">{t("hero_description")}</div>
 </div>
 """,
-    unsafe_allow_html=True,
-)
-
-result = st.session_state.get("result")
-status, _ = status_text(st.session_state.get("api_key", ""), result)
-total_findings = len(result.get("findings", [])) if result else 0
-high_findings = (
-    sum(1 for item in result.get("findings", []) if item.get("severity") in {"Critical", "High"})
-    if result
-    else 0
-)
-
-card1, card2, card3, card4, card5 = st.columns(5)
-with card1:
-    render_metric_card("Overall Risk Score", f"{result.get('risk_score', 0) if result else 0}/100", result.get("severity", "Clean") if result else "Clean")
-with card2:
-    render_metric_card("Total Findings", str(total_findings), t("local_and_ai"))
-with card3:
-    render_metric_card("High/Critical", str(high_findings), t("priority_items"))
-with card4:
-    render_metric_card("Gemini Status", status.split(":")[0], t("optional_enrichment"))
-with card5:
-    render_metric_card("Analysis Mode", st.session_state["analysis_mode"], st.session_state["input_type"])
-
-
-st.markdown(f"## 🛡️ {t('threat_detection')}")
-top_left, top_right = st.columns([2, 1])
-with top_right:
-    st.markdown(f"### 🧪 {t('demo_mode')}")
-    if st.button("🧪 Load Demo Data", use_container_width=True):
-        demo_text, demo_name = read_sample(st.session_state["input_type"])
-        st.session_state["input_text"] = demo_text
-        st.session_state["input_name"] = demo_name
-        st.rerun()
-    st.caption(t("demo_help"))
-
-with top_left:
-    uploaded_file = st.file_uploader(t("upload_optional"), type=["txt", "log", "py", "php", "js", "json", "conf"])
-    if uploaded_file and uploaded_file.name != st.session_state.get("last_upload_name"):
-        st.session_state["input_text"] = decode_upload(uploaded_file)
-        st.session_state["input_name"] = uploaded_file.name
-        st.session_state["last_upload_name"] = uploaded_file.name
-        st.rerun()
-
-    st.text_input(t("input_name"), key="input_name")
-    st.text_area(
-        t("input_text"),
-        key="input_text",
-        height=260,
-        placeholder=t("input_placeholder"),
+        unsafe_allow_html=True,
     )
 
-run_col, clear_col = st.columns([2, 1])
-with run_col:
-    run_clicked = st.button("🚀 Run ThreatLens Analysis", type="primary", use_container_width=True)
-with clear_col:
-    if st.button(t("clear"), use_container_width=True):
-        st.session_state["input_text"] = ""
-        st.session_state["result"] = None
-        st.rerun()
+    st.markdown(f"## {t('threat_detection')}")
+    top_left, top_right = st.columns([2, 1])
+    with top_right:
+        st.markdown('<div class="tl-action-card">', unsafe_allow_html=True)
+        st.markdown(f"### {t('demo_mode')}")
+        if st.button("Load Demo Data", use_container_width=True):
+            demo_text, demo_name = read_sample(st.session_state["input_type"])
+            st.session_state["input_text"] = demo_text
+            st.session_state["input_name"] = demo_name
+            st.rerun()
+        st.caption(t("demo_help"))
+        st.markdown('</div>', unsafe_allow_html=True)
 
-if run_clicked:
+    with top_left:
+        uploaded_file = st.file_uploader(t("upload_optional"), type=["txt", "log", "py", "php", "js", "json", "conf"])
+        if uploaded_file and uploaded_file.name != st.session_state.get("last_upload_name"):
+            st.session_state["input_text"] = decode_upload(uploaded_file)
+            st.session_state["input_name"] = uploaded_file.name
+            st.session_state["last_upload_name"] = uploaded_file.name
+            st.rerun()
+
+        st.text_input(t("input_name"), key="input_name")
+        st.text_area(
+            t("input_text"),
+            key="input_text",
+            height=260,
+            placeholder=t("input_placeholder"),
+        )
+
+    run_col, clear_col = st.columns([2, 1])
+    with run_col:
+        run_clicked = st.button("Run ThreatLens Analysis", type="primary", use_container_width=True)
+    with clear_col:
+        st.button(t("clear"), use_container_width=True, on_click=clear_analysis_input)
+
+    if run_clicked:
+        run_analysis_flow()
+    elif not st.session_state.get("input_text"):
+        st.info("Load demo data, upload a file, or paste input to start a new analysis.")
+
+
+def run_analysis_flow() -> None:
     try:
-        with st.spinner(t("analysis_running")):
+        loading_box = st.container()
+        with loading_box:
+            st.markdown("### Preparing analysis")
+            progress = st.progress(0)
+            status_line = st.empty()
+            steps = [
+                ("Parsing input...", 15),
+                ("Running local rules...", 35),
+                ("Calculating risk score...", 55),
+                ("Generating report...", 75),
+                ("Preparing AI explanation...", 90),
+            ]
+            for label, value in steps[:2]:
+                status_line.info(label)
+                progress.progress(value)
+                time.sleep(0.12)
+
             st.session_state["result"] = run_threatlens_analysis(
                 st.session_state["input_text"],
                 st.session_state["input_type"],
                 st.session_state["input_name"] or "manual-input",
                 st.session_state["analysis_mode"],
-                st.session_state["language"],
                 st.session_state.get("api_key", ""),
             )
-        st.success(t("analysis_complete"))
+
+            for label, value in steps[2:]:
+                status_line.info(label)
+                progress.progress(value)
+                time.sleep(0.12)
+            status_line.success("Analysis complete. Opening results...")
+            progress.progress(100)
+            time.sleep(0.15)
+
+        st.session_state["current_page"] = "Results"
         st.rerun()
     except ValueError as exc:
         st.warning(str(exc))
@@ -791,7 +896,26 @@ if run_clicked:
         st.error(t("analysis_failed", error=str(exc)))
 
 
-if st.session_state.get("result"):
-    render_results_tabs(st.session_state["result"], st.session_state.get("api_key", ""))
-else:
-    st.info(t("empty_state"))
+def render_history_page() -> None:
+    st.markdown('<div class="tl-page-kicker">Saved Analyses</div>', unsafe_allow_html=True)
+    st.markdown("# History")
+    render_history()
+
+
+def render_current_page() -> None:
+    page = st.session_state.get("current_page", "Home")
+    if page == "Results":
+        result = st.session_state.get("result")
+        if result:
+            render_results_page(result, st.session_state.get("api_key", ""))
+            return
+        st.session_state["current_page"] = "Home"
+    if page == "History":
+        render_history_page()
+        return
+    render_home_page()
+
+
+init_state()
+render_sidebar()
+render_current_page()
