@@ -9,7 +9,7 @@ from google.genai import types
 from threat_knowledge import enrich_finding
 
 
-MODEL_NAME = "gemini-2.0-flash"
+MODEL_NAME = "gemini-3.5-flash"
 
 LANGUAGE_NAMES = {
     "en": "English",
