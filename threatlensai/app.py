@@ -8,6 +8,7 @@ sys.path.insert(0, str(Path(__file__).parent.absolute()))
 
 import html
 import json
+import os
 import time
 from datetime import datetime
 from typing import Any
@@ -285,6 +286,9 @@ def t(key: str, **kwargs: Any) -> str:
 
 
 def get_secret_api_key() -> str:
+    env_key = os.environ.get("GEMINI_API_KEY", "")
+    if env_key:
+        return env_key
     try:
         return st.secrets.get("GEMINI_API_KEY", "")
     except Exception:

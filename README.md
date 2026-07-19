@@ -49,7 +49,7 @@ Local rules are intended for triage and education. They can produce false positi
 
 ## Tech Stack
 
-- Python
+- Python 3.12
 - Streamlit
 - Google Gemini API through `google-genai`
 - SQLite
@@ -76,7 +76,14 @@ threatlensai/
 |-- requirements.txt        Python dependencies for the app
 ```
 
-At the repository root, `requirements.txt` points Streamlit Cloud to `threatlensai/requirements.txt`.
+Deployment-related files live at the repository root:
+
+```text
+railway.json              Railway start command and Railpack builder config
+.python-version           Python runtime hint for Railway
+requirements.txt          Python dependencies for Railway and local installs
+.gitignore                Local secrets, runtime data, and generated files
+```
 
 ## Run Locally
 
@@ -85,7 +92,7 @@ From the repository root on Windows:
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
-pip install -r threatlensai/requirements.txt
+pip install -r requirements.txt
 streamlit run threatlensai/app.py
 ```
 
@@ -94,11 +101,36 @@ On macOS or Linux:
 ```bash
 python -m venv .venv
 source .venv/bin/activate
-pip install -r threatlensai/requirements.txt
+pip install -r requirements.txt
 streamlit run threatlensai/app.py
 ```
 
 Then open the local Streamlit URL shown in the terminal.
+
+## Railway Deployment
+
+This repository is prepared for Railway using a single `railway.json` file. Railway should run the Streamlit app with the platform-provided `PORT` variable and bind the server to `0.0.0.0`.
+
+Final Railway start command:
+
+```bash
+streamlit run threatlensai/app.py --server.address 0.0.0.0 --server.port $PORT --server.headless true
+```
+
+Manual deployment flow:
+
+1. Review the local changes.
+2. Commit and push them to GitHub.
+3. Create a Railway project.
+4. Choose `Deploy from GitHub Repo`.
+5. Select this repository.
+6. Configure environment variables if needed.
+7. Confirm Railway is using the start command above, or enter it manually.
+8. Deploy the service.
+9. Generate a public Railway domain.
+10. Test the app, including local-only analysis, optional Gemini analysis, history, and report export.
+
+Railway provides `PORT` automatically. Do not hardcode a port in the application or set a fixed port unless you intentionally override Railway's default behavior.
 
 ## Gemini API Key
 
@@ -106,18 +138,26 @@ Gemini is optional. Without a key, choose `Local Scan Only` and the app will sti
 
 ThreatLens AI reads the Gemini key from either:
 
-1. Streamlit secrets using the name `GEMINI_API_KEY`
+1. The environment variable `GEMINI_API_KEY`
 2. The sidebar password field for the active session
 
-For Streamlit Cloud, add this in the app secrets panel:
-
-```toml
-GEMINI_API_KEY = "your_api_key_here"
-```
-
-Do not commit API keys to GitHub. The sidebar field is session-only and is not stored by the app.
+For Railway, add `GEMINI_API_KEY` as a service variable only if you want server-side Gemini support. Do not commit API keys to GitHub. The sidebar field is session-only and is not stored by the app.
 
 If Gemini fails because of a key, quota, model, or service issue, ThreatLens AI falls back to local rule-based results and shows a fallback status in the sidebar.
+
+## Persistence On Railway
+
+ThreatLens AI stores analysis history in SQLite and can generate report text for downloads. On Railway, the local filesystem should be treated as ephemeral unless you configure a persistent volume.
+
+By default, the app can still create and use its SQLite database and runtime folders inside the running container, but that data may disappear after redeployments, restarts, or container replacement.
+
+Optional environment variables for custom storage paths:
+
+- `THREATLENSAI_STATE_DIR`: directory used for runtime state when no explicit DB path is set
+- `THREATLENSAI_DB_PATH`: exact SQLite database path
+- `THREATLENSAI_EXPORTS_DIR`: directory for saved report files if `save_text_report` is used
+
+Do not set these to paths outside Railway's writable filesystem. If long-term history is required, configure a Railway volume or migrate storage later; this migration does not introduce a new database service.
 
 ## Demo Data
 
@@ -128,22 +168,6 @@ The app includes sample data for quick testing:
 - Vulnerable Flask code
 
 Select an input type, click `Load Demo Data`, then click `Run ThreatLens Analysis`.
-
-## Deploy On Streamlit Community Cloud
-
-1. Push this repository to GitHub.
-2. Create a new Streamlit Community Cloud app from the repository.
-3. Set the main file path to:
-
-```text
-threatlensai/app.py
-```
-
-4. Keep the root `requirements.txt` file in place.
-5. Optional: add `GEMINI_API_KEY` in the Streamlit secrets panel.
-6. Deploy the app.
-
-If no Gemini key is configured, the app still supports local scan and demo workflows.
 
 ## Reports
 
