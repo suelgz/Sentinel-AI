@@ -848,6 +848,13 @@ def clear_analysis_input() -> None:
     st.session_state["current_page"] = "Home"
 
 
+def load_demo_data() -> None:
+    demo_text, demo_name = read_sample(st.session_state["input_type"])
+    st.session_state["demo_mode"] = True
+    st.session_state["input_text"] = demo_text
+    st.session_state["input_name"] = demo_name
+
+
 def render_sidebar() -> None:
     with st.sidebar:
         st.markdown("## ThreatLens AI")
@@ -934,12 +941,7 @@ def render_home_page() -> None:
     with run_col:
         run_clicked = st.button("Run ThreatLens Analysis", type="primary", use_container_width=True)
     with demo_col:
-        if st.button("Load Demo Data", use_container_width=True):
-            demo_text, demo_name = read_sample(st.session_state["input_type"])
-            st.session_state["demo_mode"] = True
-            st.session_state["input_text"] = demo_text
-            st.session_state["input_name"] = demo_name
-            st.rerun()
+        st.button("Load Demo Data", use_container_width=True, on_click=load_demo_data)
     with clear_col:
         st.button(t("clear"), use_container_width=True, on_click=clear_analysis_input)
 
