@@ -57,13 +57,13 @@ st.markdown(
     --tl-orange: #ff7a45;
     --tl-red: #ff4d5f;
   }
-  .block-container { padding-top: 3.2rem; padding-bottom: 3rem; max-width: 1280px; }
+  .block-container { padding-top: 2.2rem; padding-bottom: 2.4rem; max-width: 1280px; }
   .tl-hero {
     border: 1px solid var(--tl-border);
     background: linear-gradient(135deg, rgba(37,215,242,.12), rgba(39,217,141,.06));
     border-radius: 8px;
-    padding: 26px 28px;
-    margin: 8px 0 24px 0;
+    padding: 18px 22px;
+    margin: 4px 0 18px 0;
     overflow: visible;
   }
   .tl-title {
@@ -80,6 +80,45 @@ st.markdown(
     margin-bottom: 8px;
   }
   .tl-muted { color: var(--tl-muted); }
+  .tl-sidebar-details {
+    border: 1px solid var(--tl-border);
+    background: var(--tl-panel);
+    border-radius: 8px;
+    padding: 12px;
+    margin: 14px 0 16px 0;
+  }
+  .tl-sidebar-title {
+    color: var(--tl-text);
+    font-weight: 800;
+    font-size: .96rem;
+    margin-bottom: 10px;
+  }
+  .tl-sidebar-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+  .tl-sidebar-mini {
+    border: 1px solid rgba(34,50,71,.82);
+    background: rgba(7,17,31,.48);
+    border-radius: 7px;
+    padding: 9px 10px;
+  }
+  .tl-sidebar-label {
+    color: var(--tl-muted);
+    font-size: .68rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    margin-bottom: 3px;
+  }
+  .tl-sidebar-value {
+    color: var(--tl-text);
+    font-size: .94rem;
+    font-weight: 760;
+    line-height: 1.2;
+    overflow-wrap: anywhere;
+  }
   .tl-card {
     border: 1px solid var(--tl-border);
     background: var(--tl-panel);
@@ -149,6 +188,16 @@ st.markdown(
   section[data-testid="stSidebar"] {
     border-right: 1px solid var(--tl-border);
   }
+  div[data-testid="stFileUploaderDropzone"] {
+    min-height: 54px;
+    padding: 8px 12px;
+  }
+  div[data-testid="stFileUploaderDropzone"] button {
+    min-height: 34px;
+  }
+  div[data-testid="stFileUploaderDropzone"] small {
+    line-height: 1.2;
+  }
   div[data-testid="stMetric"] {
     border: 1px solid var(--tl-border);
     border-radius: 8px;
@@ -156,11 +205,11 @@ st.markdown(
   }
   .stButton > button, .stDownloadButton > button {
     border-radius: 6px;
-    min-height: 42px;
+    min-height: 40px;
     font-weight: 700;
   }
   @media (max-width: 780px) {
-    .block-container { padding-top: 2.4rem; }
+    .block-container { padding-top: 1.8rem; }
     .tl-title { font-size: 1.65rem; }
     .tl-card { min-height: auto; }
   }
@@ -569,17 +618,37 @@ def render_result_metrics(result: dict[str, Any]) -> None:
         render_metric_card("Flagged Lines", str(breakdown.get("flagged_lines_count", 0)), "Evidence matches")
 
 
-def render_analysis_details(result: dict[str, Any]) -> None:
+def render_sidebar_analysis_details(result: dict[str, Any]) -> None:
     findings = result.get("findings", [])
     rule_findings = result.get("rule_findings", [])
     breakdown = get_score_breakdown(findings, rule_findings)
-
-    st.markdown("### Analysis Details")
-    c1, c2, c3, c4 = st.columns(4)
-    c1.metric(t("input_type"), result.get("input_type", result.get("analysis_type", "-")).title())
-    c2.metric(t("avg_confidence"), f"{int(breakdown.get('avg_gemini_confidence', 0) * 100)}%")
-    c3.metric("Gemini Used", "Yes" if result.get("gemini_used") else "No")
-    c4.metric(t("analysis_id"), str(result.get("analysis_id", "-")))
+    input_type = str(result.get("input_type", result.get("analysis_type", "-"))).title()
+    details = [
+        (t("input_type"), input_type),
+        (t("avg_confidence"), f"{int(breakdown.get('avg_gemini_confidence', 0) * 100)}%"),
+        ("Gemini Used", "Yes" if result.get("gemini_used") else "No"),
+        (t("analysis_id"), str(result.get("analysis_id", "-"))),
+        (t("findings"), str(len(findings))),
+        (t("analysis_mode"), str(result.get("analysis_mode", "-"))),
+    ]
+    cards = "\n".join(
+        f"""
+        <div class="tl-sidebar-mini">
+          <div class="tl-sidebar-label">{html.escape(str(label))}</div>
+          <div class="tl-sidebar-value">{html.escape(str(value))}</div>
+        </div>
+        """
+        for label, value in details
+    )
+    st.markdown(
+        f"""
+<div class="tl-sidebar-details">
+  <div class="tl-sidebar-title">Analysis Details</div>
+  <div class="tl-sidebar-grid">{cards}</div>
+</div>
+""",
+        unsafe_allow_html=True,
+    )
 
 
 def render_results_page(result: dict[str, Any], api_key: str) -> None:
@@ -625,8 +694,6 @@ def render_results_page(result: dict[str, Any], api_key: str) -> None:
                     st.markdown(f"- {item}")
             else:
                 st.success(t("no_recommendations"))
-
-        render_analysis_details(result)
 
     with tab_findings:
         if not findings:
@@ -801,6 +868,10 @@ def render_sidebar() -> None:
                 st.session_state["current_page"] = "History"
                 st.rerun()
 
+        result = st.session_state.get("result")
+        if result:
+            render_sidebar_analysis_details(result)
+
         st.divider()
         st.markdown("### Gemini API")
         st.session_state["api_key"] = st.text_input(
@@ -830,7 +901,6 @@ def render_home_page() -> None:
     st.markdown(f"## {t('threat_detection')}")
     top_left, top_right = st.columns([2, 1])
     with top_right:
-        st.markdown('<div class="tl-action-card">', unsafe_allow_html=True)
         st.markdown("### Analysis")
         st.session_state["analysis_mode"] = st.selectbox(
             t("analysis_mode"),
@@ -842,19 +912,7 @@ def render_home_page() -> None:
             INPUT_TYPES,
             index=INPUT_TYPES.index(st.session_state.get("input_type", INPUT_TYPES[0])),
         )
-        st.session_state["demo_mode"] = st.toggle("Demo Mode", value=st.session_state.get("demo_mode", True))
         st.caption(t("sidebar_note"))
-        st.markdown('</div>', unsafe_allow_html=True)
-
-        st.markdown('<div class="tl-action-card">', unsafe_allow_html=True)
-        st.markdown(f"### {t('demo_mode')}")
-        if st.button("Load Demo Data", use_container_width=True):
-            demo_text, demo_name = read_sample(st.session_state["input_type"])
-            st.session_state["input_text"] = demo_text
-            st.session_state["input_name"] = demo_name
-            st.rerun()
-        st.caption(t("demo_help"))
-        st.markdown('</div>', unsafe_allow_html=True)
 
     with top_left:
         uploaded_file = st.file_uploader(t("upload_optional"), type=["txt", "log", "py", "php", "js", "json", "conf"])
@@ -868,13 +926,20 @@ def render_home_page() -> None:
         st.text_area(
             t("input_text"),
             key="input_text",
-            height=260,
+            height=150,
             placeholder=t("input_placeholder"),
         )
 
-    run_col, clear_col = st.columns([2, 1])
+    run_col, demo_col, clear_col = st.columns([2, 1, 1])
     with run_col:
         run_clicked = st.button("Run ThreatLens Analysis", type="primary", use_container_width=True)
+    with demo_col:
+        if st.button("Load Demo Data", use_container_width=True):
+            demo_text, demo_name = read_sample(st.session_state["input_type"])
+            st.session_state["demo_mode"] = True
+            st.session_state["input_text"] = demo_text
+            st.session_state["input_name"] = demo_name
+            st.rerun()
     with clear_col:
         st.button(t("clear"), use_container_width=True, on_click=clear_analysis_input)
 
