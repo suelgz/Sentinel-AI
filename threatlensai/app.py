@@ -628,27 +628,25 @@ def render_sidebar_analysis_details(result: dict[str, Any]) -> None:
         (t("avg_confidence"), f"{int(breakdown.get('avg_gemini_confidence', 0) * 100)}%"),
         ("Gemini Used", "Yes" if result.get("gemini_used") else "No"),
         (t("analysis_id"), str(result.get("analysis_id", "-"))),
-        (t("findings"), str(len(findings))),
-        (t("analysis_mode"), str(result.get("analysis_mode", "-"))),
     ]
-    cards = "\n".join(
-        f"""
-        <div class="tl-sidebar-mini">
-          <div class="tl-sidebar-label">{html.escape(str(label))}</div>
-          <div class="tl-sidebar-value">{html.escape(str(value))}</div>
-        </div>
-        """
-        for label, value in details
+    card_fragments = []
+    for label, value in details:
+        safe_label = html.escape(str(label))
+        safe_value = html.escape(str(value))
+        card_fragments.append(
+            f'<div class="tl-sidebar-mini">'
+            f'<div class="tl-sidebar-label">{safe_label}</div>'
+            f'<div class="tl-sidebar-value">{safe_value}</div>'
+            f'</div>'
+        )
+    cards_html = "".join(card_fragments)
+    sidebar_html = (
+        '<div class="tl-sidebar-details">'
+        '<div class="tl-sidebar-title">Analysis Details</div>'
+        f'<div class="tl-sidebar-grid">{cards_html}</div>'
+        '</div>'
     )
-    st.markdown(
-        f"""
-<div class="tl-sidebar-details">
-  <div class="tl-sidebar-title">Analysis Details</div>
-  <div class="tl-sidebar-grid">{cards}</div>
-</div>
-""",
-        unsafe_allow_html=True,
-    )
+    st.markdown(sidebar_html, unsafe_allow_html=True)
 
 
 def render_results_page(result: dict[str, Any], api_key: str) -> None:
