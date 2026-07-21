@@ -58,27 +58,27 @@ st.markdown(
     --tl-orange: #ff7a45;
     --tl-red: #ff4d5f;
   }
-  .block-container { padding-top: 2.2rem; padding-bottom: 2.4rem; max-width: 1280px; }
+  .block-container { padding-top: 1.25rem; padding-bottom: 1.5rem; max-width: 1280px; }
   .tl-hero {
     border: 1px solid var(--tl-border);
     background: linear-gradient(135deg, rgba(37,215,242,.12), rgba(39,217,141,.06));
     border-radius: 8px;
-    padding: 18px 22px;
-    margin: 4px 0 18px 0;
+    padding: 14px 20px;
+    margin: 0 0 12px 0;
     overflow: visible;
   }
   .tl-title {
     color: var(--tl-text);
-    font-size: 2.2rem;
+    font-size: 1.9rem;
     line-height: 1.1;
     font-weight: 800;
-    margin: 0 0 6px 0;
+    margin: 0 0 4px 0;
   }
   .tl-subtitle {
     color: var(--tl-cyan);
     font-size: 1.05rem;
     font-weight: 650;
-    margin-bottom: 8px;
+    margin-bottom: 5px;
   }
   .tl-muted { color: var(--tl-muted); }
   .tl-sidebar-details {
@@ -189,7 +189,7 @@ st.markdown(
 
   /* Home page only: move the hero and Analysis heading slightly lower */
   .tl-home-top-space {
-    height: 28px;
+    height: 2px;
   }
   .tl-history-top-space {
     height: 28px;
@@ -198,18 +198,26 @@ st.markdown(
     height: 30px;
   }
 
+  /* Compact Home layout so action buttons stay above the fold */
+  div[data-testid="stVerticalBlock"] > div:has(.tl-hero) {
+    gap: 0.65rem;
+  }
+  div[data-testid="stTextArea"] textarea {
+    min-height: 125px !important;
+  }
+
   section[data-testid="stSidebar"] {
     border-right: 1px solid var(--tl-border);
   }
   div[data-testid="stFileUploaderDropzone"] {
-    min-height: 54px;
-    padding: 8px 12px;
+    min-height: 46px;
+    padding: 5px 10px;
   }
   div[data-testid="stFileUploaderDropzone"] button {
-    min-height: 34px;
+    min-height: 32px;
   }
   div[data-testid="stFileUploaderDropzone"] small {
-    line-height: 1.2;
+    display: none;
   }
   div[data-testid="stMetric"] {
     border: 1px solid var(--tl-border);
@@ -1087,7 +1095,7 @@ def render_home_page() -> None:
     st.text_area(
         t("input_text"),
         key="input_text",
-        height=210,
+        height=125,
         placeholder=t("input_placeholder"),
     )
 
