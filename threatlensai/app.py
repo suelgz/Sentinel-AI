@@ -809,7 +809,7 @@ def render_results_page(result: dict[str, Any], api_key: str) -> None:
     severity = result.get("severity", "Clean")
     summary = result.get("executive_summary", {})
     top_recommendations = result.get("top_recommendations", [])
-    st.markdown('<div class="tl-page-kicker">Analysis Results</div>', unsafe_allow_html=True)
+    st.markdown('<div class="tl-page-kicker"></div>', unsafe_allow_html=True)
     st.markdown("# Results")
     render_result_metrics(result)
     st.markdown('<div class="tl-section-spacer"></div>', unsafe_allow_html=True)
