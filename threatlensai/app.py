@@ -45,6 +45,24 @@ st.set_page_config(
 st.markdown(
     """
 <style>
+  /* Remove Streamlit's fixed top chrome so it cannot cover the app.
+     This also recovers vertical space for the action buttons. */
+  header[data-testid="stHeader"] {
+    display: none !important;
+  }
+  div[data-testid="stToolbar"] {
+    display: none !important;
+  }
+  div[data-testid="stDecoration"] {
+    display: none !important;
+  }
+  #MainMenu {
+    visibility: hidden !important;
+  }
+  footer {
+    visibility: hidden !important;
+  }
+
   :root {
     --tl-bg: #07111f;
     --tl-panel: #0d1829;
@@ -58,7 +76,7 @@ st.markdown(
     --tl-orange: #ff7a45;
     --tl-red: #ff4d5f;
   }
-  .block-container { padding-top: 1.25rem; padding-bottom: 1.5rem; max-width: 1280px; }
+  .block-container { padding-top: 0.75rem !important; padding-bottom: 1.25rem; max-width: 1280px; }
   .tl-hero {
     border: 1px solid var(--tl-border);
     background: linear-gradient(135deg, rgba(37,215,242,.12), rgba(39,217,141,.06));
@@ -189,7 +207,7 @@ st.markdown(
 
   /* Home page only: move the hero and Analysis heading slightly lower */
   .tl-home-top-space {
-    height: 2px;
+    height: 4px;
   }
   .tl-history-top-space {
     height: 28px;
@@ -230,7 +248,7 @@ st.markdown(
     font-weight: 700;
   }
   @media (max-width: 780px) {
-    .block-container { padding-top: 1.8rem; }
+    .block-container { padding-top: 0.75rem !important; }
     .tl-title { font-size: 1.65rem; }
     .tl-card { min-height: auto; }
   }
@@ -809,7 +827,7 @@ def render_results_page(result: dict[str, Any], api_key: str) -> None:
     severity = result.get("severity", "Clean")
     summary = result.get("executive_summary", {})
     top_recommendations = result.get("top_recommendations", [])
-    st.markdown('<div class="tl-page-kicker"></div>', unsafe_allow_html=True)
+    st.markdown('<div class="tl-page-kicker">Analysis Results</div>', unsafe_allow_html=True)
     st.markdown("# Results")
     render_result_metrics(result)
     st.markdown('<div class="tl-section-spacer"></div>', unsafe_allow_html=True)
