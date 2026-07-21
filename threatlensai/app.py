@@ -186,6 +186,19 @@ st.markdown(
     margin-bottom: 4px;
   }
   .tl-section-spacer { margin-top: 18px; }
+
+  /* Home page only: move the hero and Analysis heading slightly lower */
+  .tl-home-top-space {
+    height: 28px;
+  }
+  .tl-analysis-heading {
+    color: var(--tl-text);
+    font-size: 1.75rem;
+    line-height: 1.2;
+    font-weight: 800;
+    margin: 12px 0 18px 0;
+  }
+
   section[data-testid="stSidebar"] {
     border-right: 1px solid var(--tl-border);
   }
@@ -897,6 +910,11 @@ def render_sidebar() -> None:
 
 def render_home_page() -> None:
     st.markdown(
+        '<div class="tl-home-top-space"></div>',
+        unsafe_allow_html=True,
+    )
+
+    st.markdown(
         f"""
 <div class="tl-hero">
   <div class="tl-title">ThreatLens AI</div>
@@ -910,7 +928,10 @@ def render_home_page() -> None:
     st.markdown(f"## {t('threat_detection')}")
     top_left, top_right = st.columns([2, 1])
     with top_right:
-        st.markdown("### Analysis")
+        st.markdown(
+            '<div class="tl-analysis-heading">Analysis</div>',
+            unsafe_allow_html=True,
+        )
         st.session_state["analysis_mode"] = st.selectbox(
             t("analysis_mode"),
             ANALYSIS_MODES,
