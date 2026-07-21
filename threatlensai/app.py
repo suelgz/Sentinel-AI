@@ -34,7 +34,6 @@ from threat_knowledge import (
 
 SAMPLE_DATA_DIR = Path(__file__).parent / "sample_data"
 ANALYSIS_MODES = ["Local Scan Only", "Local + Gemini Explanation", "Full Gemini Report"]
-INPUT_TYPES = ["Auto Detect", "Apache Log", "PHP Code", "Flask Code", "Custom Code"]
 st.set_page_config(
     page_title=APP_NAME,
     page_icon="🛡️",
@@ -195,13 +194,6 @@ st.markdown(
   .tl-history-top-space {
     height: 28px;
   }
-  .tl-analysis-heading {
-    color: var(--tl-text);
-    font-size: 1.75rem;
-    line-height: 1.2;
-    font-weight: 800;
-    margin: 12px 0 18px 0;
-  }
   .tl-sidebar-gap {
     height: 30px;
   }
@@ -318,7 +310,6 @@ def get_secret_api_key() -> str:
 def init_state() -> None:
     defaults = {
         "analysis_mode": ANALYSIS_MODES[1],
-        "input_type": INPUT_TYPES[0],
         "demo_mode": True,
         "input_text": "",
         "input_name": "manual-input",
@@ -430,21 +421,31 @@ def local_summary(severity: str, score: int, findings: list[dict[str, Any]]) -> 
     }
 
 
-def detect_input_type(content: str, selected_type: str, input_name: str = "") -> str:
-    """Detect logs, PHP, Flask/Python, or generic source code from content and filename."""
+def detect_input_type(content: str, input_name: str = "") -> str:
+    """Detect logs, PHP, Flask/Python, or generic source code.
+
+    Unknown or unsupported source code safely falls back to Custom Code.
+    """
     text = (content or "").strip()
     lowered = text.lower()
     suffix = Path(input_name or "").suffix.lower()
 
-    # File extensions are the strongest signal.
+    # Strong filename signals.
     if suffix == ".php":
         return "PHP Code"
+
     if suffix == ".py":
         if re.search(r"\bfrom\s+flask\b|\bimport\s+flask\b|Flask\s*\(|@app\.route", text):
             return "Flask Code"
         return "Custom Code"
-    if suffix in {".js", ".ts", ".java", ".c", ".cpp", ".cs", ".go", ".rb"}:
+
+    if suffix in {
+        ".js", ".jsx", ".ts", ".tsx", ".java", ".c", ".h", ".cpp", ".cc",
+        ".cxx", ".hpp", ".cs", ".go", ".rb", ".rs", ".swift", ".kt", ".kts",
+        ".scala", ".sh", ".bash", ".ps1", ".sql", ".html", ".css", ".vue",
+    }:
         return "Custom Code"
+
     if suffix in {".log"}:
         return "Apache Log"
 
@@ -468,43 +469,80 @@ def detect_input_type(content: str, selected_type: str, input_name: str = "") ->
     if re.search(r"\bfrom\s+flask\b|\bimport\s+flask\b|Flask\s*\(|@app\.route", text):
         return "Flask Code"
 
-    # Generic code markers.
-    code_patterns = (
-        r"(?m)^\s*(?:from|import)\s+[A-Za-z_]",
-        r"(?m)^\s*(?:def|class)\s+[A-Za-z_]\w*",
-        r"(?m)^\s*(?:const|let|var|function)\s+[A-Za-z_$]",
-        r"(?m)^\s*#include\s*[<\"]",
-        r"\bSELECT\b.+\bFROM\b",
-    )
-    if any(re.search(pattern, text, re.IGNORECASE | re.DOTALL) for pattern in code_patterns):
-        return "Custom Code"
-
-    # The manual selection is only a fallback when content is ambiguous.
-    if selected_type and selected_type != "Auto Detect":
-        return selected_type
+    # Anything else is treated as generic source code.
     return "Custom Code"
 
 
-def get_code_language(input_type: str, input_name: str = "") -> str:
+def detect_code_language(content: str, input_name: str = "") -> str:
+    """Infer a useful language label for Gemini and reports."""
+    text = (content or "").strip()
+    lowered = text.lower()
     suffix = Path(input_name or "").suffix.lower()
-    if input_type == "PHP Code" or suffix == ".php":
-        return "php"
-    if suffix in {".js", ".jsx"}:
-        return "javascript"
-    if suffix in {".ts", ".tsx"}:
-        return "typescript"
-    if suffix == ".java":
-        return "java"
-    if suffix in {".c", ".h"}:
-        return "c"
-    if suffix in {".cpp", ".cc", ".cxx", ".hpp"}:
-        return "cpp"
-    return "python"
+
+    extension_map = {
+        ".py": "python",
+        ".php": "php",
+        ".js": "javascript",
+        ".jsx": "javascript",
+        ".ts": "typescript",
+        ".tsx": "typescript",
+        ".java": "java",
+        ".c": "c",
+        ".h": "c",
+        ".cpp": "cpp",
+        ".cc": "cpp",
+        ".cxx": "cpp",
+        ".hpp": "cpp",
+        ".cs": "csharp",
+        ".go": "go",
+        ".rb": "ruby",
+        ".rs": "rust",
+        ".swift": "swift",
+        ".kt": "kotlin",
+        ".kts": "kotlin",
+        ".scala": "scala",
+        ".sh": "shell",
+        ".bash": "shell",
+        ".ps1": "powershell",
+        ".sql": "sql",
+        ".html": "html",
+        ".css": "css",
+        ".vue": "vue",
+    }
+    if suffix in extension_map:
+        return extension_map[suffix]
+
+    language_patterns = [
+        ("php", r"<\?php|\$_(?:get|post|request|cookie|server|files)\b"),
+        ("python", r"(?m)^\s*(?:from|import)\s+[A-Za-z_]|(?m)^\s*(?:def|class)\s+[A-Za-z_]\w*\s*[:(]"),
+        ("javascript", r"\b(?:const|let|var|function)\s+[A-Za-z_$]|\brequire\s*\(|=>"),
+        ("typescript", r"\binterface\s+\w+|\btype\s+\w+\s*=|:\s*(?:string|number|boolean)\b"),
+        ("java", r"\bpublic\s+(?:static\s+)?(?:class|interface|enum)\b|\bSystem\.out\.println\s*\("),
+        ("csharp", r"\busing\s+System\b|\bnamespace\s+\w+|\bConsole\.WriteLine\s*\("),
+        ("cpp", r"#include\s*[<\"](?:iostream|vector|string|map)|\bstd::"),
+        ("c", r"#include\s*[<\"](?:stdio\.h|stdlib\.h|string\.h)|\bprintf\s*\("),
+        ("go", r"(?m)^\s*package\s+\w+|\bfunc\s+\w+\s*\("),
+        ("ruby", r"(?m)^\s*(?:require|class|module|def)\s+|\bputs\s+"),
+        ("rust", r"\bfn\s+main\s*\(|\blet\s+mut\b|\bprintln!\s*\("),
+        ("kotlin", r"\bfun\s+main\s*\(|\bval\s+\w+|\bvar\s+\w+"),
+        ("swift", r"\bimport\s+Foundation\b|\bfunc\s+\w+\s*\(|\blet\s+\w+\s*="),
+        ("shell", r"(?m)^#!\/(?:usr\/bin\/env\s+)?(?:bash|sh)\b|\b(?:echo|grep|awk|sed)\b"),
+        ("powershell", r"\bWrite-Host\b|\bGet-[A-Z]\w+|\$\w+\s*="),
+        ("sql", r"\b(?:SELECT|INSERT|UPDATE|DELETE|CREATE|ALTER)\b.+\b(?:FROM|INTO|TABLE|SET)\b"),
+        ("html", r"<!doctype\s+html>|<html\b|<body\b|<div\b"),
+        ("css", r"(?m)^\s*[.#]?[A-Za-z][\w\s.#>:,\-\[\]=\"']*\s*\{[^}]*:[^}]*\}"),
+    ]
+
+    for language, pattern in language_patterns:
+        if re.search(pattern, text, re.IGNORECASE | re.MULTILINE | re.DOTALL):
+            return language
+
+    return "generic"
+
 
 
 def run_threatlens_analysis(
     content: str,
-    input_type: str,
     input_name: str,
     mode: str,
     api_key: str,
@@ -513,7 +551,7 @@ def run_threatlens_analysis(
     if not content:
         raise ValueError(t("empty_input"))
 
-    detected_input_type = detect_input_type(content, input_type, input_name)
+    detected_input_type = detect_input_type(content, input_name)
     is_log = detected_input_type == "Apache Log"
 
     if is_log:
@@ -522,7 +560,7 @@ def run_threatlens_analysis(
     else:
         parsed_df = pd.DataFrame()
         log_format = "code"
-        code_language = get_code_language(detected_input_type, input_name)
+        code_language = detect_code_language(content, input_name)
 
     rule_findings = run_rule_detection(parsed_df, content)
 
@@ -592,7 +630,6 @@ def run_threatlens_analysis(
         "analysis_type": analysis_type,
         "analysis_mode": mode,
         "input_type": detected_input_type,
-        "selected_input_type": input_type,
         "input_name": input_name,
         "log_format": log_format,
         "line_count": len(content.splitlines()),
@@ -955,7 +992,7 @@ def clear_analysis_input() -> None:
 
 
 def load_demo_data() -> None:
-    demo_text, demo_name = read_sample(st.session_state["input_type"])
+    demo_text, demo_name = read_sample("Apache Log")
     st.session_state["demo_mode"] = True
     st.session_state["input_text"] = demo_text
     st.session_state["input_name"] = demo_name
@@ -1017,44 +1054,42 @@ def render_home_page() -> None:
     )
 
     st.markdown(f"## {t('threat_detection')}")
-    top_left, top_right = st.columns([2, 1])
-    with top_right:
-        st.markdown(
-            '<div class="tl-analysis-heading">Analysis</div>',
-            unsafe_allow_html=True,
-        )
+
+    mode_col, name_col = st.columns([1, 2])
+    with mode_col:
         st.session_state["analysis_mode"] = st.selectbox(
             t("analysis_mode"),
             ANALYSIS_MODES,
-            index=ANALYSIS_MODES.index(st.session_state.get("analysis_mode", ANALYSIS_MODES[1])),
+            index=ANALYSIS_MODES.index(
+                st.session_state.get("analysis_mode", ANALYSIS_MODES[1])
+            ),
         )
-        current_input_type = st.session_state.get("input_type", INPUT_TYPES[0])
-        if current_input_type not in INPUT_TYPES:
-            current_input_type = INPUT_TYPES[0]
-
-        st.session_state["input_type"] = st.selectbox(
-            t("input_type"),
-            INPUT_TYPES,
-            index=INPUT_TYPES.index(current_input_type),
-            help="Auto Detect inspects the pasted text or uploaded filename. Manual choices are used only as a fallback.",
-        )
-        st.caption("Input type is detected from the content when possible. " + t("sidebar_note"))
-
-    with top_left:
-        uploaded_file = st.file_uploader(t("upload_optional"), type=["txt", "log", "py", "php", "js", "json", "conf"])
-        if uploaded_file and uploaded_file.name != st.session_state.get("last_upload_name"):
-            st.session_state["input_text"] = decode_upload(uploaded_file)
-            st.session_state["input_name"] = uploaded_file.name
-            st.session_state["last_upload_name"] = uploaded_file.name
-            st.rerun()
-
+    with name_col:
         st.text_input(t("input_name"), key="input_name")
-        st.text_area(
-            t("input_text"),
-            key="input_text",
-            height=150,
-            placeholder=t("input_placeholder"),
-        )
+
+    st.caption(t("sidebar_note"))
+
+    uploaded_file = st.file_uploader(
+        t("upload_optional"),
+        type=[
+            "txt", "log", "py", "php", "js", "jsx", "ts", "tsx", "json", "conf",
+            "java", "c", "h", "cpp", "cc", "cxx", "hpp", "cs", "go", "rb", "rs",
+            "swift", "kt", "kts", "scala", "sh", "bash", "ps1", "sql", "html",
+            "css", "vue",
+        ],
+    )
+    if uploaded_file and uploaded_file.name != st.session_state.get("last_upload_name"):
+        st.session_state["input_text"] = decode_upload(uploaded_file)
+        st.session_state["input_name"] = uploaded_file.name
+        st.session_state["last_upload_name"] = uploaded_file.name
+        st.rerun()
+
+    st.text_area(
+        t("input_text"),
+        key="input_text",
+        height=210,
+        placeholder=t("input_placeholder"),
+    )
 
     run_col, demo_col, clear_col = st.columns([2, 1, 1])
     with run_col:
@@ -1091,7 +1126,6 @@ def run_analysis_flow() -> None:
 
             st.session_state["result"] = run_threatlens_analysis(
                 st.session_state["input_text"],
-                st.session_state["input_type"],
                 st.session_state["input_name"] or "manual-input",
                 st.session_state["analysis_mode"],
                 st.session_state.get("api_key", ""),
