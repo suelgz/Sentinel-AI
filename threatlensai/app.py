@@ -191,6 +191,9 @@ st.markdown(
   .tl-home-top-space {
     height: 28px;
   }
+  .tl-history-top-space {
+    height: 28px;
+  }
   .tl-analysis-heading {
     color: var(--tl-text);
     font-size: 1.75rem;
@@ -1018,6 +1021,10 @@ def run_analysis_flow() -> None:
 
 
 def render_history_page() -> None:
+    st.markdown(
+        '<div class="tl-history-top-space"></div>',
+        unsafe_allow_html=True,
+    )
     st.markdown('<div class="tl-page-kicker">Saved Analyses</div>', unsafe_allow_html=True)
     st.markdown("# History")
     render_history()
