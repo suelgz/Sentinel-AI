@@ -995,6 +995,9 @@ def _safe_json(value: Any, default: Any) -> Any:
 
 def clear_analysis_input() -> None:
     st.session_state["input_text"] = ""
+    st.session_state["input_name"] = "manual-input"
+    st.session_state["last_upload_name"] = ""
+    st.session_state["uploaded_file"] = None
     st.session_state["result"] = None
     st.session_state["current_page"] = "Home"
 
@@ -1004,6 +1007,21 @@ def load_demo_data() -> None:
     st.session_state["demo_mode"] = True
     st.session_state["input_text"] = demo_text
     st.session_state["input_name"] = demo_name
+
+
+def handle_uploaded_file() -> None:
+    """Load an uploaded file into session state before input widgets render."""
+    uploaded_file = st.session_state.get("uploaded_file")
+    if uploaded_file is None:
+        return
+
+    if uploaded_file.name == st.session_state.get("last_upload_name"):
+        return
+
+    st.session_state["input_text"] = decode_upload(uploaded_file)
+    st.session_state["input_name"] = uploaded_file.name
+    st.session_state["last_upload_name"] = uploaded_file.name
+    st.session_state["result"] = None
 
 
 def render_sidebar() -> None:
@@ -1077,7 +1095,7 @@ def render_home_page() -> None:
 
     st.caption(t("sidebar_note"))
 
-    uploaded_file = st.file_uploader(
+    st.file_uploader(
         t("upload_optional"),
         type=[
             "txt", "log", "py", "php", "js", "jsx", "ts", "tsx", "json", "conf",
@@ -1085,12 +1103,9 @@ def render_home_page() -> None:
             "swift", "kt", "kts", "scala", "sh", "bash", "ps1", "sql", "html",
             "css", "vue",
         ],
+        key="uploaded_file",
+        on_change=handle_uploaded_file,
     )
-    if uploaded_file and uploaded_file.name != st.session_state.get("last_upload_name"):
-        st.session_state["input_text"] = decode_upload(uploaded_file)
-        st.session_state["input_name"] = uploaded_file.name
-        st.session_state["last_upload_name"] = uploaded_file.name
-        st.rerun()
 
     st.text_area(
         t("input_text"),
