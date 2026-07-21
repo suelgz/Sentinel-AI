@@ -223,7 +223,7 @@ st.markdown(
 TEXT = {
     "hero_description": "ThreatLens AI combines local regex/rule-based detection with optional Gemini explanations, summaries, remediation advice, and OWASP/MITRE context for defensive security review.",
     "gemini_api_key": "Gemini API Key",
-    "api_key_help": "Load from Streamlit secrets with GEMINI_API_KEY or paste a key for this session. The key is never stored by the app.",
+    "api_key_help": "The key is never stored by the app.",
     "analysis_mode": "Analysis Mode",
     "input_type": "Input Type",
     "sidebar_note": "Gemini enriches local findings; local scan still works without a key.",
