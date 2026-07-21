@@ -13,7 +13,6 @@ MODEL_NAME = "gemini-3.5-flash"
 
 LANGUAGE_NAMES = {
     "en": "English",
-    "tr": "Turkish",
 }
 
 
