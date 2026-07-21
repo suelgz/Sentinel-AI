@@ -342,6 +342,7 @@ def init_state() -> None:
         "api_key": get_secret_api_key(),
         "result": None,
         "last_upload_name": "",
+        "uploader_nonce": 0,
         "current_page": "Home",
     }
     for key, value in defaults.items():
@@ -1015,7 +1016,7 @@ def clear_analysis_input() -> None:
     st.session_state["input_text"] = ""
     st.session_state["input_name"] = "manual-input"
     st.session_state["last_upload_name"] = ""
-    st.session_state["uploaded_file"] = None
+    st.session_state["uploader_nonce"] = st.session_state.get("uploader_nonce", 0) + 1
     st.session_state["result"] = None
     st.session_state["current_page"] = "Home"
 
@@ -1029,7 +1030,8 @@ def load_demo_data() -> None:
 
 def handle_uploaded_file() -> None:
     """Load an uploaded file into session state before input widgets render."""
-    uploaded_file = st.session_state.get("uploaded_file")
+    uploader_key = f"uploaded_file_{st.session_state.get('uploader_nonce', 0)}"
+    uploaded_file = st.session_state.get(uploader_key)
     if uploaded_file is None:
         return
 
@@ -1072,7 +1074,7 @@ def render_sidebar() -> None:
             t("gemini_api_key"),
             value=st.session_state.get("api_key", ""),
             type="password",
-            placeholder="AIza...",
+            placeholder="Paste Gemini API key...",
             help=t("api_key_help"),
         )
         status, level = status_text(st.session_state["api_key"], st.session_state.get("result"))
@@ -1121,7 +1123,7 @@ def render_home_page() -> None:
             "swift", "kt", "kts", "scala", "sh", "bash", "ps1", "sql", "html",
             "css", "vue",
         ],
-        key="uploaded_file",
+        key=f"uploaded_file_{st.session_state.get('uploader_nonce', 0)}",
         on_change=handle_uploaded_file,
     )
 
