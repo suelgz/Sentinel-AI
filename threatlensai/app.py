@@ -11,8 +11,9 @@ import json
 import os
 import re
 import time
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 from datetime import datetime
-from typing import Any
+from typing import Any, Callable
 
 import pandas as pd
 import streamlit as st
@@ -568,12 +569,48 @@ def detect_code_language(content: str, input_name: str = "") -> str:
 
 
 
+
+GEMINI_ANALYSIS_TIMEOUT_SECONDS = 90
+GEMINI_SUMMARY_TIMEOUT_SECONDS = 60
+
+
+class GeminiRequestTimeout(RuntimeError):
+    """Raised when a Gemini request takes too long."""
+
+
+def run_with_timeout(
+    function: Callable[..., Any],
+    *args: Any,
+    timeout_seconds: int,
+) -> Any:
+    """Run a Gemini request with a soft timeout and allow local fallback."""
+    executor = ThreadPoolExecutor(max_workers=1)
+    future = executor.submit(function, *args)
+
+    try:
+        return future.result(timeout=timeout_seconds)
+    except FuturesTimeoutError as exc:
+        future.cancel()
+        raise GeminiRequestTimeout(
+            f"Gemini did not respond within {timeout_seconds} seconds."
+        ) from exc
+    finally:
+        executor.shutdown(wait=False, cancel_futures=True)
+
+
 def run_threatlens_analysis(
     content: str,
     input_name: str,
     mode: str,
     api_key: str,
+    progress_callback: Callable[[str, int], None] | None = None,
 ) -> dict[str, Any]:
+    def update_progress(message: str, value: int) -> None:
+        if progress_callback:
+            progress_callback(message, value)
+
+    update_progress("Parsing input...", 12)
+
     content = (content or "").strip()
     if not content:
         raise ValueError(t("empty_input"))
@@ -589,6 +626,7 @@ def run_threatlens_analysis(
         log_format = "code"
         code_language = detect_code_language(content, input_name)
 
+    update_progress("Running local security rules...", 28)
     rule_findings = run_rule_detection(parsed_df, content)
 
     # User-Agent rules are meaningful for access logs, not source-code input.
@@ -610,27 +648,58 @@ def run_threatlens_analysis(
     should_send_to_gemini = should_use_gemini and (rule_findings or mode == "Full Gemini Report")
 
     if should_send_to_gemini:
+        update_progress("Contacting Gemini for security analysis...", 45)
         try:
             if is_log:
-                gemini_findings = analyze_logs(flagged_content, pre_labels, api_key)
+                gemini_findings = run_with_timeout(
+                    analyze_logs,
+                    flagged_content,
+                    pre_labels,
+                    api_key,
+                    timeout_seconds=GEMINI_ANALYSIS_TIMEOUT_SECONDS,
+                )
             else:
-                gemini_findings = analyze_code(flagged_content, code_language, pre_labels, api_key)
+                gemini_findings = run_with_timeout(
+                    analyze_code,
+                    flagged_content,
+                    code_language,
+                    pre_labels,
+                    api_key,
+                    timeout_seconds=GEMINI_ANALYSIS_TIMEOUT_SECONDS,
+                )
             gemini_used = True
-        except GeminiAPIError as exc:
+            update_progress("Gemini analysis received...", 62)
+        except (GeminiAPIError, GeminiRequestTimeout) as exc:
             gemini_error = str(exc)
+            update_progress("Gemini unavailable; continuing with local results...", 62)
+    else:
+        update_progress("Using local analysis results...", 52)
 
+    update_progress("Calculating risk score...", 68)
     findings = merge_rule_and_gemini_findings(gemini_findings, rule_findings)
     risk_score, severity = compute_risk_score(findings, rule_findings)
     top_recommendations = generate_top_recommendations(findings)
     attack_timeline = build_attack_timeline(parsed_df, rule_findings) if is_log else []
 
     if should_send_to_gemini and gemini_used and mode == "Full Gemini Report":
-        executive_summary = generate_executive_summary(
-            findings, risk_score, severity, api_key
-        )
+        update_progress("Generating Gemini executive summary...", 78)
+        try:
+            executive_summary = run_with_timeout(
+                generate_executive_summary,
+                findings,
+                risk_score,
+                severity,
+                api_key,
+                timeout_seconds=GEMINI_SUMMARY_TIMEOUT_SECONDS,
+            )
+        except (GeminiAPIError, GeminiRequestTimeout) as exc:
+            gemini_error = str(exc)
+            executive_summary = local_summary(severity, risk_score, findings)
+            update_progress("Summary unavailable; using local summary...", 84)
     else:
         executive_summary = local_summary(severity, risk_score, findings)
 
+    update_progress("Saving analysis and preparing report...", 91)
     analysis_type = "log" if is_log else "code"
     analysis_id = save_analysis(
         analysis_type,
@@ -1155,32 +1224,30 @@ def run_analysis_flow() -> None:
             st.markdown("### Preparing analysis")
             progress = st.progress(0)
             status_line = st.empty()
-            steps = [
-                ("Parsing input...", 15),
-                ("Running local rules...", 35),
-                ("Calculating risk score...", 55),
-                ("Generating report...", 75),
-                ("Preparing AI explanation...", 90),
-            ]
-            for label, value in steps[:2]:
-                status_line.info(label)
-                progress.progress(value)
-                time.sleep(0.12)
+
+            def show_progress(message: str, value: int) -> None:
+                status_line.info(message)
+                progress.progress(min(max(value, 0), 100))
 
             st.session_state["result"] = run_threatlens_analysis(
                 st.session_state["input_text"],
                 st.session_state["input_name"] or "manual-input",
                 st.session_state["analysis_mode"],
                 st.session_state.get("api_key", ""),
+                progress_callback=show_progress,
             )
 
-            for label, value in steps[2:]:
-                status_line.info(label)
-                progress.progress(value)
-                time.sleep(0.12)
-            status_line.success("Analysis complete. Opening results...")
+            result = st.session_state["result"]
+            if result.get("gemini_error"):
+                status_line.warning(
+                    "Analysis completed with local fallback: "
+                    + str(result["gemini_error"])
+                )
+            else:
+                status_line.success("Analysis complete. Opening results...")
+
             progress.progress(100)
-            time.sleep(0.15)
+            time.sleep(0.2)
 
         st.session_state["current_page"] = "Results"
         st.rerun()
