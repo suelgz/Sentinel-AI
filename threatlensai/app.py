@@ -9,6 +9,7 @@ sys.path.insert(0, str(Path(__file__).parent.absolute()))
 import html
 import json
 import os
+import re
 import time
 from datetime import datetime
 from typing import Any
@@ -33,7 +34,7 @@ from threat_knowledge import (
 
 SAMPLE_DATA_DIR = Path(__file__).parent / "sample_data"
 ANALYSIS_MODES = ["Local Scan Only", "Local + Gemini Explanation", "Full Gemini Report"]
-INPUT_TYPES = ["Apache Log", "PHP Code", "Flask Code", "Custom Code"]
+INPUT_TYPES = ["Auto Detect", "Apache Log", "PHP Code", "Flask Code", "Custom Code"]
 st.set_page_config(
     page_title=APP_NAME,
     page_icon="🛡️",
@@ -200,6 +201,9 @@ st.markdown(
     line-height: 1.2;
     font-weight: 800;
     margin: 12px 0 18px 0;
+  }
+  .tl-sidebar-gap {
+    height: 30px;
   }
 
   section[data-testid="stSidebar"] {
@@ -426,6 +430,78 @@ def local_summary(severity: str, score: int, findings: list[dict[str, Any]]) -> 
     }
 
 
+def detect_input_type(content: str, selected_type: str, input_name: str = "") -> str:
+    """Detect logs, PHP, Flask/Python, or generic source code from content and filename."""
+    text = (content or "").strip()
+    lowered = text.lower()
+    suffix = Path(input_name or "").suffix.lower()
+
+    # File extensions are the strongest signal.
+    if suffix == ".php":
+        return "PHP Code"
+    if suffix == ".py":
+        if re.search(r"\bfrom\s+flask\b|\bimport\s+flask\b|Flask\s*\(|@app\.route", text):
+            return "Flask Code"
+        return "Custom Code"
+    if suffix in {".js", ".ts", ".java", ".c", ".cpp", ".cs", ".go", ".rb"}:
+        return "Custom Code"
+    if suffix in {".log"}:
+        return "Apache Log"
+
+    # Apache/common access-log pattern.
+    apache_pattern = re.compile(
+        r'(?m)^\s*(?:\d{1,3}\.){3}\d{1,3}\s+\S+\s+\S+\s+\[[^\]]+\]\s+'
+        r'"(?:GET|POST|PUT|DELETE|PATCH|HEAD|OPTIONS)\s+\S+(?:\s+HTTP/\d(?:\.\d)?)?"\s+\d{3}\b'
+    )
+    if apache_pattern.search(text):
+        return "Apache Log"
+
+    # PHP markers.
+    if (
+        "<?php" in lowered
+        or re.search(r"\$_(?:get|post|request|cookie|server|files)\b", lowered)
+        or re.search(r"\bmysqli?_(?:query|connect)\s*\(", lowered)
+    ):
+        return "PHP Code"
+
+    # Flask markers.
+    if re.search(r"\bfrom\s+flask\b|\bimport\s+flask\b|Flask\s*\(|@app\.route", text):
+        return "Flask Code"
+
+    # Generic code markers.
+    code_patterns = (
+        r"(?m)^\s*(?:from|import)\s+[A-Za-z_]",
+        r"(?m)^\s*(?:def|class)\s+[A-Za-z_]\w*",
+        r"(?m)^\s*(?:const|let|var|function)\s+[A-Za-z_$]",
+        r"(?m)^\s*#include\s*[<\"]",
+        r"\bSELECT\b.+\bFROM\b",
+    )
+    if any(re.search(pattern, text, re.IGNORECASE | re.DOTALL) for pattern in code_patterns):
+        return "Custom Code"
+
+    # The manual selection is only a fallback when content is ambiguous.
+    if selected_type and selected_type != "Auto Detect":
+        return selected_type
+    return "Custom Code"
+
+
+def get_code_language(input_type: str, input_name: str = "") -> str:
+    suffix = Path(input_name or "").suffix.lower()
+    if input_type == "PHP Code" or suffix == ".php":
+        return "php"
+    if suffix in {".js", ".jsx"}:
+        return "javascript"
+    if suffix in {".ts", ".tsx"}:
+        return "typescript"
+    if suffix == ".java":
+        return "java"
+    if suffix in {".c", ".h"}:
+        return "c"
+    if suffix in {".cpp", ".cc", ".cxx", ".hpp"}:
+        return "cpp"
+    return "python"
+
+
 def run_threatlens_analysis(
     content: str,
     input_type: str,
@@ -437,16 +513,27 @@ def run_threatlens_analysis(
     if not content:
         raise ValueError(t("empty_input"))
 
-    is_log = input_type == "Apache Log"
+    detected_input_type = detect_input_type(content, input_type, input_name)
+    is_log = detected_input_type == "Apache Log"
+
     if is_log:
         parsed_df, log_format = parse_log_file(content)
         code_language = ""
     else:
         parsed_df = pd.DataFrame()
         log_format = "code"
-        code_language = "php" if input_type == "PHP Code" else "python"
+        code_language = get_code_language(detected_input_type, input_name)
 
     rule_findings = run_rule_detection(parsed_df, content)
+
+    # User-Agent rules are meaningful for access logs, not source-code input.
+    if not is_log:
+        rule_findings = [
+            finding
+            for finding in rule_findings
+            if finding.get("threat_type") != "Suspicious User-Agent"
+        ]
+
     pre_labels = summarize_rule_findings(rule_findings)
     flagged_content = get_flagged_content_for_gemini(rule_findings) or content[:5000]
     gemini_findings: list[dict[str, Any]] = []
@@ -504,7 +591,8 @@ def run_threatlens_analysis(
         "analysis_id": analysis_id,
         "analysis_type": analysis_type,
         "analysis_mode": mode,
-        "input_type": input_type,
+        "input_type": detected_input_type,
+        "selected_input_type": input_type,
         "input_name": input_name,
         "log_format": log_format,
         "line_count": len(content.splitlines()),
@@ -897,7 +985,7 @@ def render_sidebar() -> None:
         if result:
             render_sidebar_analysis_details(result)
 
-        st.divider()
+        st.markdown('<div class="tl-sidebar-gap"></div>', unsafe_allow_html=True)
         st.markdown("### Gemini API")
         st.session_state["api_key"] = st.text_input(
             t("gemini_api_key"),
@@ -940,12 +1028,17 @@ def render_home_page() -> None:
             ANALYSIS_MODES,
             index=ANALYSIS_MODES.index(st.session_state.get("analysis_mode", ANALYSIS_MODES[1])),
         )
+        current_input_type = st.session_state.get("input_type", INPUT_TYPES[0])
+        if current_input_type not in INPUT_TYPES:
+            current_input_type = INPUT_TYPES[0]
+
         st.session_state["input_type"] = st.selectbox(
             t("input_type"),
             INPUT_TYPES,
-            index=INPUT_TYPES.index(st.session_state.get("input_type", INPUT_TYPES[0])),
+            index=INPUT_TYPES.index(current_input_type),
+            help="Auto Detect inspects the pasted text or uploaded filename. Manual choices are used only as a fallback.",
         )
-        st.caption(t("sidebar_note"))
+        st.caption("Input type is detected from the content when possible. " + t("sidebar_note"))
 
     with top_left:
         uploaded_file = st.file_uploader(t("upload_optional"), type=["txt", "log", "py", "php", "js", "json", "conf"])
