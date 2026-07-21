@@ -189,8 +189,10 @@ def _call_gemini(api_key: str, prompt: str) -> str:
         model=MODEL_NAME,
         contents=prompt,
         config=types.GenerateContentConfig(
-            temperature=0.1,
             max_output_tokens=4096,
+            thinking_config=types.ThinkingConfig(
+                thinking_level="low",
+            ),
         ),
     )
     return response.text or ""
@@ -270,6 +272,12 @@ def test_api_key(api_key: str) -> tuple:
         response = client.models.generate_content(
             model=MODEL_NAME,
             contents="Reply with the single word: OK",
+            config=types.GenerateContentConfig(
+                max_output_tokens=16,
+                thinking_config=types.ThinkingConfig(
+                    thinking_level="low",
+                ),
+            ),
         )
         return True, response.text.strip()
     except Exception as exc:
