@@ -55,6 +55,15 @@ button[data-testid="collapsedControl"] {
   border: 1px solid #25d7f2 !important;
   border-radius: 999px !important;
 }
+.stButton > button[kind="primary"] {
+  background: #0e7490 !important;
+  color: #ffffff !important;
+  border: 1px solid #67e8f9 !important;
+}
+
+.stButton > button[kind="primary"] p {
+  color: #ffffff !important;
+}
   /* Remove Streamlit's fixed top chrome so it cannot cover the app.
      This also recovers vertical space for the action buttons. */
   header[data-testid="stHeader"] {
