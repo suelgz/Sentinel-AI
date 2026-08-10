@@ -2,8 +2,8 @@
 base = "dark"
 backgroundColor = "#0A0E1A"
 secondaryBackgroundColor = "#111827"
-primaryColor = "#00E5FF"
-textColor = "#E2E8F0"
 
+textColor = "#E2E8F0"
+primaryColor = "#0E7490"
 [server]
 headless = true
