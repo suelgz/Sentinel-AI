@@ -64,10 +64,14 @@ button[data-testid="collapsedControl"] {
 .stButton > button[kind="primary"] p {
   color: #ffffff !important;
 }
-  /* Remove Streamlit's fixed top chrome so it cannot cover the app.
-     This also recovers vertical space for the action buttons. */
+  /* Keep Streamlit's header layer available so the collapsed sidebar
+     reopen control remains clickable, while making the chrome visually quiet. */
   header[data-testid="stHeader"] {
-    display: none !important;
+    background: transparent !important;
+    height: 2.5rem !important;
+  }
+  header[data-testid="stHeader"]::before {
+    background: transparent !important;
   }
   div[data-testid="stToolbar"] {
     display: none !important;
