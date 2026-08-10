@@ -238,6 +238,24 @@ button[data-testid="collapsedControl"] {
   .tl-sidebar-gap {
     height: 30px;
   }
+  .tl-control-panel {
+    border: 1px solid var(--tl-border);
+    background: rgba(13,24,41,.72);
+    border-radius: 10px;
+    padding: 14px 16px;
+    margin: 0 0 14px 0;
+  }
+  .tl-control-title {
+    color: var(--tl-text);
+    font-weight: 800;
+    font-size: 1rem;
+    margin-bottom: 2px;
+  }
+  .tl-control-note {
+    color: var(--tl-muted);
+    font-size: .84rem;
+    margin-bottom: 10px;
+  }
 
   /* Compact Home layout so action buttons stay above the fold */
   div[data-testid="stVerticalBlock"] > div:has(.tl-hero) {
@@ -367,6 +385,7 @@ def init_state() -> None:
         "last_upload_name": "",
         "uploader_nonce": 0,
         "current_page": "Home",
+        "controls_open": False,
     }
     for key, value in defaults.items():
         st.session_state.setdefault(key, value)
@@ -1172,6 +1191,63 @@ def render_sidebar() -> None:
         getattr(st, level)(status)
 
 
+def render_control_panel() -> None:
+    """Fallback controls for hosted views where Streamlit's sidebar toggle is hidden."""
+    is_open = st.session_state.get("controls_open", False)
+    button_label = "Hide controls" if is_open else "Controls"
+    if st.button(button_label, key="controls_toggle", help="Show or hide navigation and Gemini settings"):
+        st.session_state["controls_open"] = not is_open
+        st.rerun()
+
+    if not st.session_state.get("controls_open", False):
+        return
+
+    st.markdown(
+        """<div class="tl-control-panel">
+<div class="tl-control-title">ThreatLens controls</div>
+<div class="tl-control-note">Use this panel if the left sidebar is closed or hidden.</div>
+</div>""",
+        unsafe_allow_html=True,
+    )
+
+    nav_home, nav_results, nav_history = st.columns(3)
+    with nav_home:
+        if st.button("Home", key="controls_nav_home", use_container_width=True):
+            st.session_state["current_page"] = "Home"
+            st.rerun()
+    with nav_results:
+        if st.button(
+            "Results",
+            key="controls_nav_results",
+            use_container_width=True,
+            disabled=not bool(st.session_state.get("result")),
+        ):
+            st.session_state["current_page"] = "Results"
+            st.rerun()
+    with nav_history:
+        if st.button("History", key="controls_nav_history", use_container_width=True):
+            st.session_state["current_page"] = "History"
+            st.rerun()
+
+    st.session_state.setdefault("api_key_inline", st.session_state.get("api_key", ""))
+    inline_key = st.text_input(
+        t("gemini_api_key"),
+        value=st.session_state.get("api_key_inline", ""),
+        type="password",
+        placeholder="Paste Gemini API key...",
+        help=t("api_key_help"),
+        key="controls_api_key_input",
+    )
+    st.session_state["api_key_inline"] = inline_key
+    st.session_state["api_key"] = inline_key
+    status, level = status_text(st.session_state["api_key"], st.session_state.get("result"))
+    getattr(st, level)(status)
+
+    result = st.session_state.get("result")
+    if result:
+        render_sidebar_analysis_details(result)
+
+
 
 def render_home_page() -> None:
     st.markdown(
@@ -1305,4 +1381,5 @@ def render_current_page() -> None:
 
 init_state()
 render_sidebar()
+render_control_panel()
 render_current_page()
