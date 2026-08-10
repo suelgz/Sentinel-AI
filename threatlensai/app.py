@@ -46,6 +46,15 @@ st.set_page_config(
 st.markdown(
     """
 <style>
+button[data-testid="collapsedControl"] {
+  display: flex !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  background: #0d1829 !important;
+  color: #e6edf7 !important;
+  border: 1px solid #25d7f2 !important;
+  border-radius: 999px !important;
+}
   /* Remove Streamlit's fixed top chrome so it cannot cover the app.
      This also recovers vertical space for the action buttons. */
   header[data-testid="stHeader"] {
