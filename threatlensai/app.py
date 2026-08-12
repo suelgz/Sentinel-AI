@@ -9,9 +9,9 @@ sys.path.insert(0, str(Path(__file__).parent.absolute()))
 import html
 import json
 import os
+import platform
 import re
 import time
-from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 from datetime import datetime
 from typing import Any, Callable
 
@@ -19,7 +19,15 @@ import pandas as pd
 import streamlit as st
 
 from database import delete_analysis, get_all_analyses, get_analysis_detail, save_analysis, save_uploaded_file
-from gemini_client import GeminiAPIError, analyze_code, analyze_logs, generate_executive_summary
+from gemini_client import (
+    GeminiAPIError,
+    analyze_code,
+    analyze_logs,
+    format_gemini_error,
+    generate_executive_summary,
+    get_model_name,
+    get_sdk_version,
+)
 APP_NAME = "ThreatLens AI"
 from log_parser import get_log_stats, parse_log_file
 from report_generator import build_text_report
@@ -37,7 +45,7 @@ SAMPLE_DATA_DIR = Path(__file__).parent / "sample_data"
 ANALYSIS_MODES = ["Local Scan Only", "Local + Gemini Explanation", "Full Gemini Report"]
 st.set_page_config(
     page_title=APP_NAME,
-    page_icon="🛡️",
+    page_icon="ğŸ›¡ï¸",
     layout="wide",
     initial_sidebar_state="expanded",
 )
@@ -46,41 +54,36 @@ st.set_page_config(
 st.markdown(
     """
 <style>
-
-.stButton > button[kind="primary"] {
-  background: #0e7490 !important;
-  color: #ffffff !important;
-  border: 1px solid #67e8f9 !important;
-}
-
-.stButton > button[kind="primary"] p {
-  color: #ffffff !important;
-}
-  /* Keep Streamlit's header layer available so the collapsed sidebar
-     reopen control remains clickable, while making the chrome visually quiet. */
+  /* Keep Streamlit's sidebar control layer alive so the left controls can
+     collapse and reopen from the native button. */
   header[data-testid="stHeader"] {
     background: transparent !important;
-  
+    height: 2.875rem !important;
+    pointer-events: none;
   }
   header[data-testid="stHeader"]::before {
     background: transparent !important;
   }
- 
+  header[data-testid="stHeader"] button,
+  header[data-testid="stHeader"] [role="button"],
+  div[data-testid="collapsedControl"],
+  div[data-testid="collapsedControl"] * {
+    pointer-events: auto !important;
+  }
+  div[data-testid="collapsedControl"] {
+    display: flex !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    left: 0.45rem !important;
+    top: 0.45rem !important;
+    z-index: 999999 !important;
+  }
+  div[data-testid="stToolbar"] {
+    display: none !important;
+  }
   div[data-testid="stDecoration"] {
     display: none !important;
   }
-  /* Keep Streamlit's native sidebar reopen button visible */
-div[data-testid="collapsedControl"] {
-  display: flex !important;
-  visibility: visible !important;
-  opacity: 1 !important;
-  pointer-events: auto !important;
-  z-index: 999999 !important;
-}
-
-div[data-testid="collapsedControl"] button {
-  pointer-events: auto !important;
-}
   #MainMenu {
     visibility: hidden !important;
   }
@@ -240,24 +243,6 @@ div[data-testid="collapsedControl"] button {
   .tl-sidebar-gap {
     height: 30px;
   }
-  .tl-control-panel {
-    border: 1px solid var(--tl-border);
-    background: rgba(13,24,41,.72);
-    border-radius: 10px;
-    padding: 14px 16px;
-    margin: 0 0 14px 0;
-  }
-  .tl-control-title {
-    color: var(--tl-text);
-    font-weight: 800;
-    font-size: 1rem;
-    margin-bottom: 2px;
-  }
-  .tl-control-note {
-    color: var(--tl-muted);
-    font-size: .84rem;
-    margin-bottom: 10px;
-  }
 
   /* Compact Home layout so action buttons stay above the fold */
   div[data-testid="stVerticalBlock"] > div:has(.tl-hero) {
@@ -366,14 +351,37 @@ def t(key: str, **kwargs: Any) -> str:
     return text.format(**kwargs) if kwargs else text
 
 
-def get_secret_api_key() -> str:
-    env_key = os.environ.get("GEMINI_API_KEY", "")
-    if env_key:
-        return env_key
+def get_env_api_key() -> str:
+    return os.environ.get("GEMINI_API_KEY", "").strip()
+
+
+def get_streamlit_secret_api_key() -> str:
     try:
-        return st.secrets.get("GEMINI_API_KEY", "")
+        return str(st.secrets.get("GEMINI_API_KEY", "") or "").strip()
     except Exception:
         return ""
+
+
+def get_default_api_key() -> str:
+    # Precedence after sidebar input: Railway/env first, then Streamlit secrets.
+    return get_env_api_key() or get_streamlit_secret_api_key()
+
+
+def get_effective_api_key(sidebar_key: str = "") -> str:
+    # Deterministic precedence: sidebar session input, GEMINI_API_KEY env, Streamlit secrets.
+    return (sidebar_key or "").strip() or get_default_api_key()
+
+
+@st.cache_resource(show_spinner=False)
+def log_startup_diagnostics(api_key_exists: bool) -> bool:
+    print(
+        "ThreatLens startup diagnostics | "
+        f"python={platform.python_version()} | "
+        f"google-genai={get_sdk_version()} | "
+        f"gemini_model={get_model_name()} | "
+        f"gemini_api_key_exists={bool(api_key_exists)}"
+    )
+    return True
 
 
 def init_state() -> None:
@@ -382,16 +390,15 @@ def init_state() -> None:
         "demo_mode": True,
         "input_text": "",
         "input_name": "manual-input",
-        "api_key": get_secret_api_key(),
+        "api_key_input": "",
+        "api_key": get_default_api_key(),
         "result": None,
         "last_upload_name": "",
         "uploader_nonce": 0,
         "current_page": "Home",
-        "controls_open": False,
     }
     for key, value in defaults.items():
         st.session_state.setdefault(key, value)
-
 
 def read_sample(sample_name: str) -> tuple[str, str]:
     samples = {
@@ -452,13 +459,39 @@ def decode_upload(uploaded_file: Any) -> str:
         return ""
 
 
-def status_text(api_key: str, result: dict[str, Any] | None = None) -> tuple[str, str]:
-    if result and result.get("gemini_error"):
-        return "❌ Gemini error: fallback to local results", "error"
-    if api_key:
-        return "✅ Gemini connected", "success"
-    return "⚠️ Gemini key missing: local analysis only", "warning"
+def get_structured_gemini_error(exc: Exception, stage: str) -> dict[str, Any]:
+    if isinstance(exc, GeminiAPIError):
+        error = dict(exc.error)
+    else:
+        error = {
+            "type": type(exc).__name__,
+            "status_code": None,
+            "message": str(exc),
+            "stage": stage,
+        }
+    error["stage"] = error.get("stage") or stage
+    return error
 
+
+def status_text(api_key: str, result: dict[str, Any] | None = None) -> tuple[str, str]:
+    has_key = bool((api_key or "").strip())
+    if result:
+        if result.get("gemini_used"):
+            warnings = result.get("gemini_warnings") or []
+            if warnings:
+                return (
+                    "Gemini connected and used successfully; summary stage warning: "
+                    + format_gemini_error(warnings[0]),
+                    "warning",
+                )
+            return "Gemini connected and used successfully", "success"
+
+        if result.get("gemini_error"):
+            return "Gemini unavailable; local fallback used: " + format_gemini_error(result.get("gemini_error")), "error"
+
+    if has_key:
+        return "Gemini API key entered; connection not tested yet", "info"
+    return "Gemini key missing: local analysis only", "warning"
 
 def severity_style(severity: str) -> tuple[str, str]:
     color = get_severity_color(severity)
@@ -613,33 +646,15 @@ def detect_code_language(content: str, input_name: str = "") -> str:
 
 
 
-GEMINI_ANALYSIS_TIMEOUT_SECONDS = 90
-GEMINI_SUMMARY_TIMEOUT_SECONDS = 60
-
-
-class GeminiRequestTimeout(RuntimeError):
-    """Raised when a Gemini request takes too long."""
-
-
-def run_with_timeout(
-    function: Callable[..., Any],
-    *args: Any,
-    timeout_seconds: int,
-) -> Any:
-    """Run a Gemini request with a soft timeout and allow local fallback."""
-    executor = ThreadPoolExecutor(max_workers=1)
-    future = executor.submit(function, *args)
-
+def _env_int(name: str, default: int) -> int:
     try:
-        return future.result(timeout=timeout_seconds)
-    except FuturesTimeoutError as exc:
-        future.cancel()
-        raise GeminiRequestTimeout(
-            f"Gemini did not respond within {timeout_seconds} seconds."
-        ) from exc
-    finally:
-        executor.shutdown(wait=False, cancel_futures=True)
+        return max(1, int(os.environ.get(name, default)))
+    except (TypeError, ValueError):
+        return default
 
+
+GEMINI_ANALYSIS_TIMEOUT_SECONDS = _env_int("GEMINI_ANALYSIS_TIMEOUT_SECONDS", 45)
+GEMINI_SUMMARY_TIMEOUT_SECONDS = _env_int("GEMINI_SUMMARY_TIMEOUT_SECONDS", 30)
 
 def run_threatlens_analysis(
     content: str,
@@ -655,6 +670,7 @@ def run_threatlens_analysis(
     update_progress("Parsing input...", 12)
 
     content = (content or "").strip()
+    api_key = (api_key or "").strip()
     if not content:
         raise ValueError(t("empty_input"))
 
@@ -685,25 +701,24 @@ def run_threatlens_analysis(
     gemini_findings: list[dict[str, Any]] = []
     executive_summary: dict[str, Any] = {}
     gemini_used = False
-    gemini_error = ""
+    gemini_error: dict[str, Any] | None = None
+    gemini_warnings: list[dict[str, Any]] = []
 
     should_use_gemini = mode != "Local Scan Only" and bool(api_key)
     should_send_to_gemini = should_use_gemini and (rule_findings or mode == "Full Gemini Report")
 
     if should_send_to_gemini:
-        update_progress("Contacting Gemini for security analysis...", 45)
+        update_progress("Contacting Gemini for vulnerability analysis...", 45)
         try:
             if is_log:
-                gemini_findings = run_with_timeout(
-                    analyze_logs,
+                gemini_findings = analyze_logs(
                     flagged_content,
                     pre_labels,
                     api_key,
                     timeout_seconds=GEMINI_ANALYSIS_TIMEOUT_SECONDS,
                 )
             else:
-                gemini_findings = run_with_timeout(
-                    analyze_code,
+                gemini_findings = analyze_code(
                     flagged_content,
                     code_language,
                     pre_labels,
@@ -711,10 +726,12 @@ def run_threatlens_analysis(
                     timeout_seconds=GEMINI_ANALYSIS_TIMEOUT_SECONDS,
                 )
             gemini_used = True
-            update_progress("Gemini analysis received...", 62)
-        except (GeminiAPIError, GeminiRequestTimeout) as exc:
-            gemini_error = str(exc)
-            update_progress("Gemini unavailable; continuing with local results...", 62)
+            update_progress("Gemini vulnerability analysis received...", 62)
+        except GeminiAPIError as exc:
+            gemini_error = get_structured_gemini_error(exc, "analysis")
+            update_progress("Gemini analysis unavailable; continuing with local results...", 62)
+    elif mode != "Local Scan Only" and not api_key:
+        update_progress("Gemini key missing; using local analysis results...", 52)
     else:
         update_progress("Using local analysis results...", 52)
 
@@ -727,18 +744,18 @@ def run_threatlens_analysis(
     if should_send_to_gemini and gemini_used and mode == "Full Gemini Report":
         update_progress("Generating Gemini executive summary...", 78)
         try:
-            executive_summary = run_with_timeout(
-                generate_executive_summary,
+            executive_summary = generate_executive_summary(
                 findings,
                 risk_score,
                 severity,
                 api_key,
                 timeout_seconds=GEMINI_SUMMARY_TIMEOUT_SECONDS,
             )
-        except (GeminiAPIError, GeminiRequestTimeout) as exc:
-            gemini_error = str(exc)
+            update_progress("Gemini executive summary received...", 84)
+        except GeminiAPIError as exc:
+            gemini_warnings.append(get_structured_gemini_error(exc, "summary"))
             executive_summary = local_summary(severity, risk_score, findings)
-            update_progress("Summary unavailable; using local summary...", 84)
+            update_progress("Gemini summary unavailable; using local executive summary...", 84)
     else:
         executive_summary = local_summary(severity, risk_score, findings)
 
@@ -782,9 +799,11 @@ def run_threatlens_analysis(
         "attack_timeline": attack_timeline,
         "gemini_used": gemini_used,
         "gemini_error": gemini_error,
+        "gemini_warnings": gemini_warnings,
+        "gemini_model": get_model_name(),
+        "gemini_sdk_version": get_sdk_version(),
         "created_at": datetime.now().isoformat(timespec="seconds"),
     }
-
 
 def build_json_export(result: dict[str, Any]) -> str:
     payload = {
@@ -792,6 +811,10 @@ def build_json_export(result: dict[str, Any]) -> str:
         "timestamp": datetime.now().isoformat(timespec="seconds"),
         "analysis_mode": result.get("analysis_mode"),
         "gemini_used": result.get("gemini_used", False),
+        "gemini_model": result.get("gemini_model"),
+        "gemini_sdk_version": result.get("gemini_sdk_version"),
+        "gemini_error": result.get("gemini_error"),
+        "gemini_warnings": result.get("gemini_warnings", []),
         "overall_risk_score": result.get("risk_score", 0),
         "severity": result.get("severity", "Clean"),
         "findings": result.get("findings", []),
@@ -856,7 +879,7 @@ def render_finding(finding: dict[str, Any], index: int) -> None:
     <span class="tl-badge" style="{badge_style}">{html.escape(severity)}</span>
   </div>
   <div class="tl-muted" style="margin-top:6px">
-    Confidence: {confidence}% AI / {rule_confidence}% Rule · Source: {html.escape(str(finding.get("analysis_source", "Rule Engine")))}
+    Confidence: {confidence}% AI / {rule_confidence}% Rule Â· Source: {html.escape(str(finding.get("analysis_source", "Rule Engine")))}
   </div>
   <div class="tl-muted" style="margin-top:6px">
     OWASP: {html.escape(str(finding.get("owasp_category", "N/A")))}<br>
@@ -867,7 +890,7 @@ def render_finding(finding: dict[str, Any], index: int) -> None:
         unsafe_allow_html=True,
     )
 
-    with st.expander(f"📌 {t('evidence_and_remediation')} #{index}", expanded=index == 1):
+    with st.expander(f"ğŸ“Œ {t('evidence_and_remediation')} #{index}", expanded=index == 1):
         st.markdown(f'<div class="tl-evidence">{evidence}</div>', unsafe_allow_html=True)
         left, right = st.columns(2)
         with left:
@@ -1079,15 +1102,15 @@ def render_history() -> None:
         return
     for item in analyses:
         label = (
-            f"{item.get('created_at', '')[:16].replace('T', ' ')} · "
-            f"{item.get('input_filename', 'input')} · "
-            f"{item.get('severity_label', 'Clean')} · {item.get('overall_risk_score', 0)}/100"
+            f"{item.get('created_at', '')[:16].replace('T', ' ')} Â· "
+            f"{item.get('input_filename', 'input')} Â· "
+            f"{item.get('severity_label', 'Clean')} Â· {item.get('overall_risk_score', 0)}/100"
         )
         with st.expander(label):
             detail = get_analysis_detail(item["id"])
             st.caption(f"{t('findings')}: {len(detail.get('findings', []))}")
             for finding in detail.get("findings", [])[:5]:
-                st.markdown(f"- **{finding.get('threat_type', 'Unknown')}** · {finding.get('severity', 'Unknown')}")
+                st.markdown(f"- **{finding.get('threat_type', 'Unknown')}** Â· {finding.get('severity', 'Unknown')}")
             col1, col2 = st.columns([1, 1])
             with col1:
                 if st.button(t("load_history"), key=f"load_{item['id']}"):
@@ -1182,17 +1205,17 @@ def render_sidebar() -> None:
 
         st.markdown('<div class="tl-sidebar-gap"></div>', unsafe_allow_html=True)
         st.markdown("### Gemini API")
-        st.session_state["api_key"] = st.text_input(
+        sidebar_api_key = st.text_input(
             t("gemini_api_key"),
-            value=st.session_state.get("api_key", ""),
+            value=st.session_state.get("api_key_input", ""),
             type="password",
             placeholder="Paste Gemini API key...",
             help=t("api_key_help"),
         )
+        st.session_state["api_key_input"] = (sidebar_api_key or "").strip()
+        st.session_state["api_key"] = get_effective_api_key(st.session_state["api_key_input"])
         status, level = status_text(st.session_state["api_key"], st.session_state.get("result"))
         getattr(st, level)(status)
-
-
 
 
 
@@ -1286,7 +1309,12 @@ def run_analysis_flow() -> None:
             if result.get("gemini_error"):
                 status_line.warning(
                     "Analysis completed with local fallback: "
-                    + str(result["gemini_error"])
+                    + format_gemini_error(result["gemini_error"])
+                )
+            elif result.get("gemini_warnings"):
+                status_line.warning(
+                    "Analysis complete with Gemini findings; "
+                    + format_gemini_error(result["gemini_warnings"][0])
                 )
             else:
                 status_line.success("Analysis complete. Opening results...")
@@ -1327,5 +1355,9 @@ def render_current_page() -> None:
 
 
 init_state()
+st.session_state["api_key"] = get_effective_api_key(st.session_state.get("api_key_input", ""))
+log_startup_diagnostics(bool(st.session_state.get("api_key")))
 render_sidebar()
 render_current_page()
+
+
