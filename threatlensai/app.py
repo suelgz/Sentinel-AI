@@ -46,15 +46,7 @@ st.set_page_config(
 st.markdown(
     """
 <style>
-button[data-testid="collapsedControl"] {
-  display: flex !important;
-  visibility: visible !important;
-  opacity: 1 !important;
-  background: #0d1829 !important;
-  color: #e6edf7 !important;
-  border: 1px solid #25d7f2 !important;
-  border-radius: 999px !important;
-}
+
 .stButton > button[kind="primary"] {
   background: #0e7490 !important;
   color: #ffffff !important;
@@ -68,17 +60,27 @@ button[data-testid="collapsedControl"] {
      reopen control remains clickable, while making the chrome visually quiet. */
   header[data-testid="stHeader"] {
     background: transparent !important;
-    height: 2.5rem !important;
+  
   }
   header[data-testid="stHeader"]::before {
     background: transparent !important;
   }
-  div[data-testid="stToolbar"] {
-    display: none !important;
-  }
+ 
   div[data-testid="stDecoration"] {
     display: none !important;
   }
+  /* Keep Streamlit's native sidebar reopen button visible */
+div[data-testid="collapsedControl"] {
+  display: flex !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  pointer-events: auto !important;
+  z-index: 999999 !important;
+}
+
+div[data-testid="collapsedControl"] button {
+  pointer-events: auto !important;
+}
   #MainMenu {
     visibility: hidden !important;
   }
@@ -1191,61 +1193,6 @@ def render_sidebar() -> None:
         getattr(st, level)(status)
 
 
-def render_control_panel() -> None:
-    """Fallback controls for hosted views where Streamlit's sidebar toggle is hidden."""
-    is_open = st.session_state.get("controls_open", False)
-    button_label = "Hide controls" if is_open else "Controls"
-    if st.button(button_label, key="controls_toggle", help="Show or hide navigation and Gemini settings"):
-        st.session_state["controls_open"] = not is_open
-        st.rerun()
-
-    if not st.session_state.get("controls_open", False):
-        return
-
-    st.markdown(
-        """<div class="tl-control-panel">
-<div class="tl-control-title">ThreatLens controls</div>
-<div class="tl-control-note">Use this panel if the left sidebar is closed or hidden.</div>
-</div>""",
-        unsafe_allow_html=True,
-    )
-
-    nav_home, nav_results, nav_history = st.columns(3)
-    with nav_home:
-        if st.button("Home", key="controls_nav_home", use_container_width=True):
-            st.session_state["current_page"] = "Home"
-            st.rerun()
-    with nav_results:
-        if st.button(
-            "Results",
-            key="controls_nav_results",
-            use_container_width=True,
-            disabled=not bool(st.session_state.get("result")),
-        ):
-            st.session_state["current_page"] = "Results"
-            st.rerun()
-    with nav_history:
-        if st.button("History", key="controls_nav_history", use_container_width=True):
-            st.session_state["current_page"] = "History"
-            st.rerun()
-
-    st.session_state.setdefault("api_key_inline", st.session_state.get("api_key", ""))
-    inline_key = st.text_input(
-        t("gemini_api_key"),
-        value=st.session_state.get("api_key_inline", ""),
-        type="password",
-        placeholder="Paste Gemini API key...",
-        help=t("api_key_help"),
-        key="controls_api_key_input",
-    )
-    st.session_state["api_key_inline"] = inline_key
-    st.session_state["api_key"] = inline_key
-    status, level = status_text(st.session_state["api_key"], st.session_state.get("result"))
-    getattr(st, level)(status)
-
-    result = st.session_state.get("result")
-    if result:
-        render_sidebar_analysis_details(result)
 
 
 
@@ -1381,5 +1328,4 @@ def render_current_page() -> None:
 
 init_state()
 render_sidebar()
-render_control_panel()
 render_current_page()
