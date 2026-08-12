@@ -1,15 +1,20 @@
 from __future__ import annotations
 
+import importlib.metadata
 import json
+import os
 import re
+from typing import Any
 
 from google import genai
+from google.genai import errors
 from google.genai import types
 
 from threat_knowledge import enrich_finding
 
 
-MODEL_NAME = "gemini-3.5-flash"
+DEFAULT_MODEL_NAME = "gemini-3.5-flash"
+DEFAULT_REQUEST_TIMEOUT_SECONDS = 45
 
 LANGUAGE_NAMES = {
     "en": "English",
@@ -17,11 +22,65 @@ LANGUAGE_NAMES = {
 
 
 class GeminiAPIError(RuntimeError):
-    """Raised when Gemini enrichment fails before producing findings."""
+    """Raised when Gemini enrichment fails before producing validated output."""
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        error_type: str = "GEMINI_ERROR",
+        status_code: int | None = None,
+        stage: str = "analysis",
+    ) -> None:
+        sanitized_message = sanitize_error_message(message)
+        self.error = {
+            "type": error_type,
+            "status_code": status_code,
+            "message": sanitized_message,
+            "stage": stage,
+        }
+        super().__init__(format_gemini_error(self.error))
 
 
-def _get_client(api_key: str):
-    return genai.Client(api_key=api_key)
+def get_sdk_version() -> str:
+    try:
+        return importlib.metadata.version("google-genai")
+    except importlib.metadata.PackageNotFoundError:
+        return "not-installed"
+
+
+def get_model_name() -> str:
+    return (os.environ.get("GEMINI_MODEL") or DEFAULT_MODEL_NAME).strip() or DEFAULT_MODEL_NAME
+
+
+def sanitize_error_message(message: Any) -> str:
+    text = str(message or "").replace("\n", " ").strip()
+    text = re.sub(r"AIza[0-9A-Za-z_\-]{20,}", "[REDACTED_API_KEY]", text)
+    text = re.sub(r"(?i)(api[_-]?key['\"]?\s*[:=]\s*['\"]?)[^'\"\s,&}]+", r"\1[REDACTED]", text)
+    text = re.sub(r"(?i)(key=)[^&\s]+", r"\1[REDACTED]", text)
+    return text[:700] if text else "No error message was returned."
+
+
+def format_gemini_error(error: dict[str, Any] | str | None) -> str:
+    if isinstance(error, str):
+        return sanitize_error_message(error)
+    if not isinstance(error, dict):
+        return "Gemini request failed."
+
+    stage = error.get("stage") or "gemini"
+    error_type = error.get("type") or "GEMINI_ERROR"
+    status_code = error.get("status_code")
+    message = sanitize_error_message(error.get("message"))
+    code_prefix = f"{status_code} " if status_code else ""
+    return f"{stage}: {code_prefix}{error_type}: {message}"
+
+
+def _get_client(api_key: str, timeout_seconds: int = DEFAULT_REQUEST_TIMEOUT_SECONDS):
+    timeout_ms = max(1, int(timeout_seconds * 1000))
+    return genai.Client(
+        api_key=api_key,
+        http_options=types.HttpOptions(timeout=timeout_ms),
+    )
 
 
 def _extract_json(text: str):
@@ -181,35 +240,89 @@ Bu yapiyi dondur:
 }}"""
 
 
-def _call_gemini(api_key: str, prompt: str) -> str:
-    if not api_key:
-        raise GeminiAPIError("Gemini API key is missing.")
-    client = _get_client(api_key)
-    response = client.models.generate_content(
-        model=MODEL_NAME,
-        contents=prompt,
-        config=types.GenerateContentConfig(
-            max_output_tokens=4096,
-            thinking_config=types.ThinkingConfig(
-                thinking_level="low",
-            ),
-        ),
+def _classify_api_error(exc: Exception, stage: str) -> GeminiAPIError:
+    if isinstance(exc, GeminiAPIError):
+        return exc
+
+    if isinstance(exc, errors.APIError):
+        status_code = getattr(exc, "code", None)
+        status = getattr(exc, "status", None) or "API_ERROR"
+        message = getattr(exc, "message", None) or str(exc)
+        error_type = str(status)
+        if status_code == 404 and re.search(r"model|not found", str(message), re.IGNORECASE):
+            error_type = "MODEL_NOT_FOUND"
+        return GeminiAPIError(message, error_type=error_type, status_code=status_code, stage=stage)
+
+    class_name = type(exc).__name__
+    message = str(exc)
+    lowered = message.lower()
+    if "timed out" in lowered or "timeout" in lowered or class_name.lower().endswith("timeout"):
+        return GeminiAPIError(message, error_type="REQUEST_TIMEOUT", stage=stage)
+    if "name resolution" in lowered or "dns" in lowered:
+        return GeminiAPIError(message, error_type="DNS_NETWORK_ERROR", stage=stage)
+    if "connect" in lowered or "network" in lowered or "connection" in lowered:
+        return GeminiAPIError(message, error_type="NETWORK_ERROR", stage=stage)
+    if isinstance(exc, json.JSONDecodeError):
+        return GeminiAPIError(message, error_type="INVALID_JSON_RESPONSE", stage=stage)
+    return GeminiAPIError(message or class_name, error_type=class_name, stage=stage)
+
+
+def _json_config(max_output_tokens: int) -> types.GenerateContentConfig:
+    return types.GenerateContentConfig(
+        max_output_tokens=max_output_tokens,
+        response_mime_type="application/json",
+        thinking_config=types.ThinkingConfig(thinking_level="low"),
     )
-    return response.text or ""
 
 
-def analyze_logs(log_content: str, pre_labels: str, api_key: str, language: str = "en") -> list:
+def _call_gemini(
+    api_key: str,
+    prompt: str,
+    *,
+    stage: str,
+    max_output_tokens: int = 4096,
+    timeout_seconds: int = DEFAULT_REQUEST_TIMEOUT_SECONDS,
+) -> str:
+    api_key = (api_key or "").strip()
+    if not api_key:
+        raise GeminiAPIError("Gemini API key is missing.", error_type="KEY_MISSING", stage=stage)
+
+    try:
+        client = _get_client(api_key, timeout_seconds=timeout_seconds)
+        response = client.models.generate_content(
+            model=get_model_name(),
+            contents=prompt,
+            config=_json_config(max_output_tokens),
+        )
+        text = (response.text or "").strip()
+        if not text:
+            raise GeminiAPIError("Gemini returned an empty response.", error_type="EMPTY_RESPONSE", stage=stage)
+        return text
+    except Exception as exc:
+        raise _classify_api_error(exc, stage) from exc
+
+
+def analyze_logs(
+    log_content: str,
+    pre_labels: str,
+    api_key: str,
+    language: str = "en",
+    timeout_seconds: int = DEFAULT_REQUEST_TIMEOUT_SECONDS,
+) -> list:
     prompt = LOG_ANALYSIS_PROMPT.format(
         log_content=log_content[:5000],
         pre_labels=pre_labels,
         output_language=LANGUAGE_NAMES.get(language, "English"),
     )
-    try:
-        text = _call_gemini(api_key, prompt)
-        result = _extract_json(text)
-        return _enrich_result(result) if isinstance(result, list) else []
-    except Exception as exc:
-        raise GeminiAPIError(str(exc)) from exc
+    text = _call_gemini(api_key, prompt, stage="analysis", timeout_seconds=timeout_seconds)
+    result = _extract_json(text)
+    if not isinstance(result, list):
+        raise GeminiAPIError(
+            "Gemini response was not valid JSON in the expected findings-array format.",
+            error_type="INVALID_JSON_RESPONSE",
+            stage="analysis",
+        )
+    return _enrich_result(result)
 
 
 def analyze_code(
@@ -218,6 +331,7 @@ def analyze_code(
     pre_labels: str,
     api_key: str,
     language: str = "en",
+    timeout_seconds: int = DEFAULT_REQUEST_TIMEOUT_SECONDS,
 ) -> list:
     prompt = CODE_ANALYSIS_PROMPT.format(
         language=code_language,
@@ -225,12 +339,15 @@ def analyze_code(
         pre_labels=pre_labels,
         output_language=LANGUAGE_NAMES.get(language, "English"),
     )
-    try:
-        text = _call_gemini(api_key, prompt)
-        result = _extract_json(text)
-        return _enrich_result(result) if isinstance(result, list) else []
-    except Exception as exc:
-        raise GeminiAPIError(str(exc)) from exc
+    text = _call_gemini(api_key, prompt, stage="analysis", timeout_seconds=timeout_seconds)
+    result = _extract_json(text)
+    if not isinstance(result, list):
+        raise GeminiAPIError(
+            "Gemini response was not valid JSON in the expected findings-array format.",
+            error_type="INVALID_JSON_RESPONSE",
+            stage="analysis",
+        )
+    return _enrich_result(result)
 
 
 def generate_executive_summary(
@@ -239,6 +356,7 @@ def generate_executive_summary(
     severity_label: str,
     api_key: str,
     language: str = "en",
+    timeout_seconds: int = DEFAULT_REQUEST_TIMEOUT_SECONDS,
 ) -> dict:
     prompt = EXECUTIVE_SUMMARY_PROMPT.format(
         findings_json=json.dumps(findings, indent=2)[:3500],
@@ -246,12 +364,21 @@ def generate_executive_summary(
         severity_label=severity_label,
         output_language=LANGUAGE_NAMES.get(language, "English"),
     )
-    try:
-        text = _call_gemini(api_key, prompt)
-        result = _extract_json(text)
-        return result if isinstance(result, dict) else _default_summary(severity_label)
-    except Exception as exc:
-        return _default_summary(severity_label, str(exc))
+    text = _call_gemini(
+        api_key,
+        prompt,
+        stage="summary",
+        max_output_tokens=2048,
+        timeout_seconds=timeout_seconds,
+    )
+    result = _extract_json(text)
+    if not isinstance(result, dict):
+        raise GeminiAPIError(
+            "Gemini response was not valid JSON in the expected summary-object format.",
+            error_type="INVALID_JSON_RESPONSE",
+            stage="summary",
+        )
+    return result
 
 
 def translate_to_turkish(finding: dict, api_key: str) -> dict:
@@ -259,29 +386,65 @@ def translate_to_turkish(finding: dict, api_key: str) -> dict:
         technical_finding=json.dumps(finding, indent=2, ensure_ascii=False)[:2500]
     )
     try:
-        text = _call_gemini(api_key, prompt)
+        text = _call_gemini(api_key, prompt, stage="translation", max_output_tokens=2048)
         result = _extract_json(text)
         return result if isinstance(result, dict) else {}
     except Exception as exc:
-        return {"error": str(exc)}
+        error = exc.error if isinstance(exc, GeminiAPIError) else _classify_api_error(exc, "translation").error
+        return {"error": format_gemini_error(error)}
 
 
-def test_api_key(api_key: str) -> tuple:
+def test_api_key(
+    api_key: str,
+    model_name: str | None = None,
+    timeout_seconds: int = 15,
+) -> tuple[bool, str]:
     try:
-        client = _get_client(api_key)
+        client = _get_client((api_key or "").strip(), timeout_seconds=timeout_seconds)
         response = client.models.generate_content(
-            model=MODEL_NAME,
-            contents="Reply with the single word: OK",
+            model=(model_name or get_model_name()).strip(),
+            contents='Return exactly this JSON: {"status":"ok"}',
             config=types.GenerateContentConfig(
                 max_output_tokens=16,
-                thinking_config=types.ThinkingConfig(
-                    thinking_level="low",
-                ),
+                response_mime_type="application/json",
             ),
         )
-        return True, response.text.strip()
+        text = (response.text or "").strip()
+        result = _extract_json(text)
+        if not isinstance(result, dict) or result.get("status") != "ok":
+            raise GeminiAPIError(
+                "Gemini test returned an invalid JSON response.",
+                error_type="INVALID_JSON_RESPONSE",
+                stage="connection_test",
+            )
+        return True, "Gemini connected and returned valid JSON."
     except Exception as exc:
-        return False, str(exc)
+        error = exc.error if isinstance(exc, GeminiAPIError) else _classify_api_error(exc, "connection_test").error
+        return False, format_gemini_error(error)
+
+
+def inspect_model(api_key: str, model_name: str | None = None, timeout_seconds: int = 15) -> dict[str, Any]:
+    model_id = (model_name or get_model_name()).strip()
+    try:
+        client = _get_client((api_key or "").strip(), timeout_seconds=timeout_seconds)
+        model = client.models.get(model=model_id)
+        actions = [str(action) for action in (getattr(model, "supported_actions", None) or [])]
+        return {
+            "ok": any("generateContent" in action or "generate_content" in action for action in actions),
+            "model": model_id,
+            "display_name": getattr(model, "display_name", ""),
+            "supported_actions": actions,
+            "error": None,
+        }
+    except Exception as exc:
+        error = exc.error if isinstance(exc, GeminiAPIError) else _classify_api_error(exc, "model_inspection").error
+        return {
+            "ok": False,
+            "model": model_id,
+            "display_name": "",
+            "supported_actions": [],
+            "error": error,
+        }
 
 
 def _enrich_result(result: list) -> list:
